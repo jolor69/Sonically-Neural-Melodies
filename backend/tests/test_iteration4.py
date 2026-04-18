@@ -16,8 +16,8 @@ if not BASE_URL:
     BASE_URL = "https://audio-enhance-34.preview.emergentagent.com"
 
 # Test credentials
-ADMIN_EMAIL = "jolor69@gmail.com"
-ADMIN_PASSWORD = "AdminJolor2026!"
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "jolor69@gmail.com")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "AdminJolor2026!")
 DEMO_EMAIL = "demo@sonically.io"
 DEMO_PASSWORD = "DemoUser123!"
 

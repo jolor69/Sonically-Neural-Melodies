@@ -9,9 +9,9 @@ import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Create unique test user for clean state
-TEST_USER_EMAIL = f"test_paypal_{int(time.time())}@test.com"
-TEST_USER_PASSWORD = "TestPayPal123!"
+# Test user (env-overridable; defaults generate a unique email per run)
+TEST_USER_EMAIL = os.environ.get("TEST_PAYPAL_EMAIL", f"test_paypal_{int(time.time())}@test.com")
+TEST_USER_PASSWORD = os.environ.get("TEST_PAYPAL_PASSWORD", "TestPayPal123!")
 TEST_USER_NAME = "PayPal Test User"
 
 

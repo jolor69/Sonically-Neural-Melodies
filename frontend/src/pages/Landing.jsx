@@ -232,7 +232,7 @@ export default function Landing() {
             { icon: Wand2, title: "Pick a Preset", desc: "Eight flavours from Natural to Punch. Swap instantly." },
             { icon: Download, title: "Download", desc: "Platform-ready files normalized per streaming LUFS." },
           ].map((s, i) => (
-            <div key={i} className="bg-[#121216] border border-[#2A2A35] rounded-xl p-8 hover:border-[#E28C22]/60 transition" data-testid={`step-${i}`}>
+            <div key={s.title} className="bg-[#121216] border border-[#2A2A35] rounded-xl p-8 hover:border-[#A855F7]/60 transition" data-testid={`step-${i}`}>
               <div className="w-12 h-12 rounded-lg bg-[#E28C22]/10 border border-[#E28C22]/30 flex items-center justify-center mb-5">
                 <s.icon size={22} color="#E28C22" />
               </div>
@@ -370,7 +370,7 @@ export default function Landing() {
               img: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?crop=entropy&cs=tinysrgb&fm=jpg&q=80&w=940",
             },
           ].map((e, i) => (
-            <div key={i} className="bg-[#121216] border border-[#2A2A35] rounded-xl overflow-hidden group" data-testid={`engineer-${i}`}>
+            <div key={e.name} className="bg-[#121216] border border-[#2A2A35] rounded-xl overflow-hidden group" data-testid={`engineer-${i}`}>
               <div className="aspect-[16/9] overflow-hidden">
                 <img src={e.img} alt={e.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition duration-700" />
               </div>

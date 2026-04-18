@@ -11,9 +11,9 @@ import tempfile
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-DEMO_EMAIL = "demo@sonically.io"
-DEMO_PASSWORD = "DemoUser123!"
+# Test credentials (env-overridable)
+DEMO_EMAIL = os.environ.get("TEST_DEMO_EMAIL", "demo@sonically.io")
+DEMO_PASSWORD = os.environ.get("TEST_DEMO_PASSWORD", "DemoUser123!")
 
 
 @pytest.fixture(scope="module")

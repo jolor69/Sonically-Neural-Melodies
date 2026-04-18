@@ -11,7 +11,11 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.get("/auth/me");
       setUser(res.data);
-    } catch {
+    } catch (e) {
+      // 401 on /auth/me just means "not logged in" — expected for anonymous visitors
+      if (e?.response?.status && e.response.status !== 401) {
+        console.warn("Auth check failed:", e);
+      }
       setUser(null);
     } finally {
       setLoading(false);
@@ -43,7 +47,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); } catch {}
+    try { await api.post("/auth/logout"); } catch (e) { console.warn("Logout API failed:", e); }
     localStorage.removeItem("auth_token");
     setUser(null);
   };
@@ -52,7 +56,9 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.get("/auth/me");
       setUser(res.data);
-    } catch {}
+    } catch (e) {
+      console.warn("Refresh /auth/me failed:", e);
+    }
   };
 
   return (

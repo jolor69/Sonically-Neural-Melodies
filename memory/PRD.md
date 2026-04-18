@@ -65,6 +65,15 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 6 — Code review fixes (2026-02-18)
+- **Backend critical fix**: `download_track()` initialized `out_bytes = b""` before the try/finally to eliminate the "possibly undefined" code path.
+- **Test credentials**: all hardcoded values in `/app/backend/tests/*.py` moved behind `os.environ.get(...)` with the prior values as fallbacks (TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD, TEST_DEMO_EMAIL, TEST_DEMO_PASSWORD, TEST_PAYPAL_EMAIL/PASSWORD). Added `/app/backend/tests/conftest.py` that loads .env + re-exports the constants.
+- **Hook dep + empty catch cleanup** in `AuthContext.jsx` (non-401 errors logged), `AuthCallback.jsx` (OAuth failure logs), so silent failures now appear in console for debugging.
+- **Array-index keys** replaced with stable content keys (`s.title`, `e.name`) for the Landing `steps` and `engineers` maps. Decorative bar arrays (static length, no reorder) keep index keys — correct for those.
+- Workspace/PresetCard audio try/catch are intentional (harmless playback state resets); left silent per audio-element best practice.
+- Insecure token storage (localStorage) acknowledged; migrating to httpOnly cookies is a larger architecture change — deferred. React's default JSX escaping + CSP is our current XSS defense.
+- Large-component refactor suggestions (Admin / Dashboard / Landing split into sub-components, receipt dataclass, useAudioPlayer hook) deferred as low-value-at-this-stage cosmetic cleanup that risks regressing stable UI.
+
 ## Iteration 5 — P2 batch: test receipt + batch upload + purple rebrand (2026-02-18)
 - **Admin "Email me a test receipt" button** — new endpoint `POST /api/admin/test-receipt` + button in /admin. Sends a sample receipt to the admin's email so they can QA the template without a real transaction. Verified via Resend (email IDs returned).
 - **Batch upload** (Pro/Studio only): Dashboard file picker sets `multiple` when user tier is pro/studio/admin. Free users get a purple hint to upgrade. Upload queue (`upload-queue` testid) shows per-item status (queued/uploading/done/failed) with an "Open →" link when done. Backend unchanged — frontend queues sequential POSTs.

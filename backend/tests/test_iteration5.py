@@ -12,11 +12,11 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-ADMIN_EMAIL = "jolor69@gmail.com"
-ADMIN_PASSWORD = "AdminJolor2026!"
-DEMO_EMAIL = "demo@sonically.io"
-DEMO_PASSWORD = "DemoUser123!"
+# Test credentials (loaded from env via conftest.py; defaults in conftest.py)
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "jolor69@gmail.com")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "AdminJolor2026!")
+DEMO_EMAIL = os.environ.get("TEST_DEMO_EMAIL", "demo@sonically.io")
+DEMO_PASSWORD = os.environ.get("TEST_DEMO_PASSWORD", "DemoUser123!")
 
 
 class TestHealthAndPlans:

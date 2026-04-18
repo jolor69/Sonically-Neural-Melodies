@@ -700,6 +700,7 @@ async def download_track(
         fin.write(mastered_bytes)
         in_path = fin.name
     out_path = in_path + f".out.{fmt['ext']}"
+    out_bytes = b""
     try:
         cmd = ["ffmpeg", "-y", "-i", in_path, *fmt["ffmpeg_args"], out_path]
         r = subprocess.run(cmd, capture_output=True, timeout=300)

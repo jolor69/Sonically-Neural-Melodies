@@ -28,6 +28,7 @@ export default function AuthCallback() {
         window.history.replaceState({}, document.title, "/dashboard");
         navigate("/dashboard", { replace: true, state: { user: res.data.user } });
       } catch (e) {
+        console.error("OAuth session exchange failed:", e);
         navigate("/login?error=oauth_failed", { replace: true });
       }
     })();
