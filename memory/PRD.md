@@ -65,6 +65,12 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 8 — Login bounce-back on deployed site (2026-02-18)
+- **Bug**: Users logging into sonically.pro successfully got redirected back to /login immediately. Happened for both admin and non-admin users.
+- **Root cause**: `auth.resolve_user()` checked for the `session_token` cookie BEFORE the Authorization Bearer JWT. Once a user had ever done Google OAuth (even in a previous session), their browser held a stale `session_token` cookie for the API domain. With axios `withCredentials: true`, that stale cookie was sent on every request. `resolve_user` saw cookie first → treated request as session auth → `user_sessions` lookup failed → 401 → AuthContext set user=null → ProtectedRoute bounced to /login.
+- **Fix**: Reordered `resolve_user` to try the Authorization Bearer JWT FIRST. If valid, the user is returned immediately. Only if the Bearer is absent / not a JWT does it fall back to the session_token cookie. Verified via curl all 5 auth paths: JWT alone, JWT+stale cookie, valid session cookie, session token as Bearer, no auth.
+- **User action**: **Redeploy required** — the fix is in `/app/backend/auth.py`; running container on sonically.pro still has old code.
+
 ## Iteration 7 — Preset resilience on deployed app (2026-02-18)
 - **Root cause**: `Landing.jsx` + `Workspace.jsx` initialized `presets` state as `[]` and relied entirely on `/api/presets` succeeding. Any network hiccup / CORS mismatch / cold-start 502 on the deployed app resulted in `presets=[]` → the "Signature presets" section rendered 0 cards.
 - **Fix**: Created `/app/frontend/src/lib/presetsFallback.js` with full display metadata for all 8 presets (universal, fire, clarity, tape, natural, spatial, cinematic, punch) mirroring `/app/backend/presets.py`. Both Landing and Workspace now initialize state to `FALLBACK_PRESETS`. The API call is still made; if it succeeds with a non-empty array, it overrides the fallback. Failures are logged to console.
