@@ -65,6 +65,15 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 5 — P2 batch: test receipt + batch upload + purple rebrand (2026-02-18)
+- **Admin "Email me a test receipt" button** — new endpoint `POST /api/admin/test-receipt` + button in /admin. Sends a sample receipt to the admin's email so they can QA the template without a real transaction. Verified via Resend (email IDs returned).
+- **Batch upload** (Pro/Studio only): Dashboard file picker sets `multiple` when user tier is pro/studio/admin. Free users get a purple hint to upgrade. Upload queue (`upload-queue` testid) shows per-item status (queued/uploading/done/failed) with an "Open →" link when done. Backend unchanged — frontend queues sequential POSTs.
+- **Pro tier 30 → 20 exports/month** (TIER_LIMITS.pro.max_tracks_per_month).
+- **Pricing bullets updated** on both /pricing and Landing: Pro = `20 exports / month`, `WAV 16/24-bit · MP3 320k · FLAC`, `All 8 presets + Intensity & EQ`, `Batch upload (queue multiple tracks)`. Studio = `Batch upload + priority processing`. LUFS bullet removed.
+- **Intensity + EQ kept as-is** (user choice b).
+- **Color scheme refresh**: Neural Melodies purple `#A855F7` is now the PRIMARY brand color; orange `#E28C22` is SECONDARY. New CSS utilities in index.css: `.btn-gradient`, `.text-brand-gradient`, `.border-brand-gradient` (all purple→orange 135° linear-gradient). Applied to: Navbar logo tile + "Launch App" CTA, Landing hero headline accent + CTAs, all primary buttons across Auth / Dashboard / Admin / Pricing / Workspace / PaymentSuccess. Dashboard dropzone + track-row hover borders switched to purple. Waveform bars now use purple→orange gradient.
+- Tested 11/11 backend + all frontend (iteration_5.json).
+
 ## Iteration 4 — Stripe removal + Admin pricing + Terms (2026-02-18)
 - **Stripe removed entirely**: removed `/api/payments/checkout`, `/api/webhook/stripe`, all emergentintegrations Stripe imports from hot paths. `/api/payments/status/{session_id}` kept (used by PaymentSuccess polling for PayPal orders).
 - **Admin pricing**: new `get_effective_pricing()` / `get_effective_plans()` helpers. Admin settings model now accepts `pro_monthly_price`, `studio_monthly_price`, `yearly_discount_percent`. `/api/admin/apply` now MERGES draft into applied (duration keys survive a pricing-only update).
