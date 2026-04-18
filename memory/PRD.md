@@ -65,6 +65,14 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 3 — UI polish + Resend receipts + price bump (2026-02-18)
+- **Pricing +10%:** Pro monthly $4.99→$5.49, Pro yearly $44.99→$49.49, Studio monthly $12.99→$14.29, Studio yearly $119.99→$131.99. Display derivations ($4.12/mo, $11/mo) reflect per-month cost of yearly plans.
+- **Contrast fixes:** "SAVE 25%" on Yearly toggle now dark-on-orange (readable); "POPULAR" badge same treatment.
+- **PayPal buttons:** Both cards now use identical vertical gold button (fundingSource='paypal') — eliminated Pay Later split to keep both cards visually identical.
+- **Landing hero:** Removed "AI · Analog · Mastered" overline above the main headline.
+- **Resend email receipts** (`/app/backend/emails.py`): On successful Stripe or PayPal payment, the tier-upgrade path calls `send_payment_receipt()` exactly once (idempotent via `receipt_sent` flag in `payment_transactions`). HTML + plain-text receipt with plan, amount, provider, txn id, link back to /dashboard. From: `Sonically <onboarding@resend.dev>`, Reply-To: `neural.melodies.notes@gmail.com`.
+- Tested 22/22 iteration 3 (iteration_3.json).
+
 ## Test Results (iteration 1)
 - Backend: **30/30 tests passed**
 - Frontend: **All flows verified**
