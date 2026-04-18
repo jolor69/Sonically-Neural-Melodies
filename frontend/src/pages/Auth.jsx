@@ -162,7 +162,7 @@ export default function Auth() {
               type="submit"
               disabled={busy}
               data-testid="auth-submit-btn"
-              className="w-full bg-[#E28C22] text-[#0A0A0C] font-bold py-3 rounded-md hover:bg-[#F5A138] transition inline-flex items-center justify-center gap-2 disabled:opacity-60"
+              className="w-full btn-gradient font-bold py-3 rounded-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {busy ? "..." : (mode === "signup" ? "Create account" : "Log in")} <ArrowRight size={16} />
             </button>

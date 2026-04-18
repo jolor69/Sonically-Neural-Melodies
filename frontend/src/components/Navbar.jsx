@@ -11,14 +11,14 @@ export default function Navbar({ variant = "app" }) {
     <header className="glass border-b border-[#2A2A35] sticky top-0 z-40" data-testid="navbar">
       <div className="max-w-7xl mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
-          <div className="w-8 h-8 rounded-md bg-[#E28C22] flex items-center justify-center text-[#0A0A0C] group-hover:rotate-12 transition-transform">
+          <div className="w-8 h-8 rounded-md btn-gradient flex items-center justify-center group-hover:rotate-12 transition-transform">
             <Music4 size={18} strokeWidth={2.5} />
           </div>
           <div className="flex flex-col leading-none">
             <span className="text-xl font-black tracking-tight" style={{ fontFamily: "Outfit" }}>
               Sonically
             </span>
-            <span className="label-overline text-[8px] mt-0.5 text-[#A855F7]">
+            <span className="label-overline text-[8px] mt-0.5 text-brand-gradient">
               by Neural Melodies
             </span>
           </div>
@@ -75,7 +75,7 @@ export default function Navbar({ variant = "app" }) {
               </Link>
               <Link
                 to="/login?mode=signup"
-                className="bg-[#E28C22] text-[#0A0A0C] font-semibold px-4 py-2 rounded-md hover:bg-[#F5A138] transition text-sm"
+                className="btn-gradient font-semibold px-4 py-2 rounded-md transition text-sm"
                 data-testid="nav-signup"
               >
                 Launch App

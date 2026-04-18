@@ -158,7 +158,7 @@ export default function Workspace() {
               onClick={process}
               disabled={processing || !selectedId}
               data-testid="process-btn"
-              className="bg-[#E28C22] text-[#0A0A0C] font-bold px-6 py-3 rounded-md hover:bg-[#F5A138] transition inline-flex items-center gap-2 disabled:opacity-50"
+              className="btn-gradient font-bold px-6 py-3 rounded-md inline-flex items-center gap-2 disabled:opacity-50"
             >
               {processing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
               {processing ? "Mastering…" : (track.status === "mastered" ? "Re-master" : "Master track")}

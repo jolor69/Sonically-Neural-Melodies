@@ -178,7 +178,7 @@ export default function Landing() {
         <div className="relative max-w-7xl mx-auto px-6 md:px-10 py-24 md:py-36">
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter max-w-4xl fade-up" style={{ fontFamily: "Outfit" }}>
             Master your sound <br />
-            <span className="text-[#E28C22]">in under a minute.</span>
+            <span className="text-brand-gradient">in under a minute.</span>
           </h1>
           <p className="mt-8 text-lg text-[#9CA3AF] max-w-2xl leading-relaxed fade-up" style={{ animationDelay: "150ms" }}>
             Professional mastering driven by engineer-curated presets. Upload a track, pick a vibe,
@@ -188,14 +188,14 @@ export default function Landing() {
             <Link
               to="/login?mode=signup"
               data-testid="hero-cta-launch"
-              className="bg-[#E28C22] text-[#0A0A0C] font-bold px-8 py-4 rounded-md hover:bg-[#F5A138] transition inline-flex items-center gap-2"
+              className="btn-gradient font-bold px-8 py-4 rounded-md inline-flex items-center gap-2"
             >
               Launch App <ArrowRight size={18} />
             </Link>
             <a
               href="#presets"
               data-testid="hero-cta-presets"
-              className="border border-[#2A2A35] px-8 py-4 rounded-md hover:border-[#E28C22] hover:text-[#E28C22] transition inline-flex items-center gap-2"
+              className="border border-[#2A2A35] px-8 py-4 rounded-md hover:border-[#A855F7] hover:text-[#A855F7] transition inline-flex items-center gap-2"
             >
               See the 8 Presets
             </a>
@@ -443,10 +443,10 @@ export default function Landing() {
             highlight
             badge="Popular"
             features={[
-              "30 exports / month",
+              "20 exports / month",
               "WAV 16/24-bit · MP3 320k · FLAC",
-              "All 8 presets + Intensity & EQ controls",
-              "LUFS targeting · 5-min max per track",
+              "All 8 presets + Intensity & EQ",
+              "Batch upload (queue multiple tracks)",
             ]}
             cta="Upgrade to Pro"
             ctaTo="/login?mode=signup"
@@ -462,7 +462,7 @@ export default function Landing() {
               "Unlimited exports",
               "Hi-res 24/96 & 24/192",
               "All 8 presets + full controls",
-              "Priority processing queue",
+              "Batch upload + priority processing",
             ]}
             cta="Upgrade to Studio"
             ctaTo="/login?mode=signup"
@@ -489,7 +489,7 @@ export default function Landing() {
             <Link
               to="/login?mode=signup"
               data-testid="footer-cta"
-              className="inline-flex items-center gap-2 bg-[#E28C22] text-[#0A0A0C] font-bold px-8 py-4 rounded-md hover:bg-[#F5A138] transition"
+              className="inline-flex items-center gap-2 btn-gradient font-bold px-8 py-4 rounded-md"
             >
               Launch Sonically <ArrowRight size={18} />
             </Link>

@@ -144,7 +144,7 @@ TIER_LIMITS = {
         "allowed_presets": ["universal", "fire", "clarity", "tape"],
     },
     "pro": {
-        "max_tracks_per_month": 30,
+        "max_tracks_per_month": 20,
         "max_file_mb": 100,
         "max_duration_sec": 300,  # 5 minutes (admin-overrideable)
         "advanced_controls": True,
@@ -1007,6 +1007,33 @@ async def admin_apply_changes(
     # Also flip pending discounts to active
     result = await db.discount_codes.update_many({"pending": True}, {"$set": {"active": True, "pending": False}})
     return {"ok": True, "applied": merged, "discount_activated": result.modified_count}
+
+
+@api.post("/admin/test-receipt")
+async def admin_send_test_receipt(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    """Sends a sample receipt email to the admin so they can preview the template."""
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    from emails import send_payment_receipt
+    host_url = str(request.base_url).rstrip("/")
+    email_id = await send_payment_receipt(
+        to_email=user["email"],
+        name=user.get("name", "Admin"),
+        plan="pro",
+        billing="monthly",
+        amount=5.49,
+        currency="usd",
+        provider="paypal",
+        txn_id=f"TEST-{uuid.uuid4().hex[:12].upper()}",
+        app_url=host_url,
+    )
+    if not email_id:
+        raise HTTPException(status_code=502, detail="Email send failed — check RESEND_API_KEY and Resend dashboard logs")
+    return {"ok": True, "email_id": email_id, "to": user["email"]}
 
 
 @api.get("/admin/discounts")

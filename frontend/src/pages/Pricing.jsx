@@ -149,7 +149,7 @@ export default function Pricing() {
                 onClick={validateCode}
                 disabled={validating || !code.trim()}
                 data-testid="pricing-discount-apply"
-                className="bg-[#E28C22] text-[#0A0A0C] font-semibold text-sm px-4 py-1.5 rounded-full hover:bg-[#F5A138] disabled:opacity-50"
+                className="btn-gradient font-semibold text-sm px-4 py-1.5 rounded-full disabled:opacity-50"
               >
                 {validating ? "…" : "Apply"}
               </button>
@@ -182,10 +182,10 @@ export default function Pricing() {
             highlight
             badge="Popular"
             features={[
-              "30 exports / month",
+              "20 exports / month",
               "WAV 16/24-bit · MP3 320k · FLAC",
               "All 8 presets + Intensity & EQ",
-              "LUFS targeting · 5-min max per track",
+              "Batch upload (queue multiple tracks)",
             ]}
             testId="plan-pro"
             current={user?.subscription_tier === "pro"}
@@ -210,7 +210,7 @@ export default function Pricing() {
               "Unlimited exports",
               "Hi-res 24/96 & 24/192",
               "All 8 presets + full controls",
-              "Priority processing queue",
+              "Batch upload + priority processing",
             ]}
             testId="plan-studio"
             current={user?.subscription_tier === "studio"}

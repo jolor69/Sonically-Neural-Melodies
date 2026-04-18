@@ -4,7 +4,7 @@ import Navbar from "../components/Navbar";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, CheckCircle2, ShieldCheck, Clock, Tag, DollarSign, Percent } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckCircle2, ShieldCheck, Clock, Tag, DollarSign, Percent, Mail } from "lucide-react";
 
 const PERCENT_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 
@@ -15,6 +15,7 @@ export default function Admin() {
   const [discounts, setDiscounts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [testingReceipt, setTestingReceipt] = useState(false);
 
   // Duration sliders (minutes)
   const [proMin, setProMin] = useState(5);
@@ -111,6 +112,18 @@ export default function Admin() {
       toast.error("Apply failed");
     } finally {
       setApplying(false);
+    }
+  };
+
+  const sendTestReceipt = async () => {
+    setTestingReceipt(true);
+    try {
+      const r = await api.post("/admin/test-receipt");
+      toast.success(`Test receipt sent to ${r.data.to}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Send failed");
+    } finally {
+      setTestingReceipt(false);
     }
   };
 
@@ -317,7 +330,7 @@ export default function Admin() {
               type="submit"
               disabled={busy}
               data-testid="admin-discount-add-btn"
-              className="bg-[#E28C22] text-[#0A0A0C] font-semibold px-4 py-2 rounded-md hover:bg-[#F5A138] transition inline-flex items-center gap-1 disabled:opacity-50"
+              className="btn-gradient font-semibold px-4 py-2 rounded-md inline-flex items-center gap-1 disabled:opacity-50"
             >
               <Plus size={16} /> Add
             </button>
@@ -367,15 +380,37 @@ export default function Admin() {
           )}
         </section>
 
-        <section className="bg-[#121216] border border-[#A855F7]/40 rounded-2xl p-6 mb-20" data-testid="admin-privileges-section">
+        <section className="bg-[#121216] border border-[#A855F7]/40 rounded-2xl p-6 mb-8" data-testid="admin-privileges-section">
           <div className="flex items-start gap-3">
             <ShieldCheck size={18} className="text-[#A855F7] mt-0.5" />
-            <div>
+            <div className="flex-1">
               <div className="font-semibold mb-1">You have admin privileges.</div>
               <div className="text-sm text-[#9CA3AF]">
                 Your account <span className="text-white mono">{user?.email}</span> bypasses all tier limits — unlimited exports, all 8 presets, full Intensity + EQ controls, no payment required. Use responsibly.
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="bg-[#121216] border border-[#2A2A35] rounded-2xl p-6 mb-20" data-testid="admin-email-test-section">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail size={18} className="text-[#A855F7]" />
+            <h2 className="text-2xl font-bold" style={{ fontFamily: "Outfit" }}>Email receipt preview</h2>
+          </div>
+          <p className="text-sm text-[#9CA3AF] mb-4">
+            Send yourself a sample payment receipt to confirm the template looks right in your inbox.
+          </p>
+          <button
+            onClick={sendTestReceipt}
+            disabled={testingReceipt}
+            data-testid="admin-test-receipt-btn"
+            className="btn-gradient font-semibold px-5 py-2.5 rounded-md inline-flex items-center gap-2 disabled:opacity-60"
+          >
+            {testingReceipt ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+            {testingReceipt ? "Sending…" : `Email me a test receipt`}
+          </button>
+          <div className="mt-3 text-xs text-[#6B7280]">
+            Will send to: <span className="mono text-[#9CA3AF]">{user?.email}</span>
           </div>
         </section>
       </main>
@@ -390,7 +425,7 @@ export default function Admin() {
               onClick={applyAll}
               disabled={applying}
               data-testid="admin-apply-all-btn"
-              className="bg-[#E28C22] text-[#0A0A0C] font-bold px-5 py-2 rounded-full hover:bg-[#F5A138] inline-flex items-center gap-2 disabled:opacity-60"
+              className="btn-gradient font-bold px-5 py-2 rounded-full inline-flex items-center gap-2 disabled:opacity-60"
             >
               {applying ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               {applying ? "Applying…" : "Apply all changes"}

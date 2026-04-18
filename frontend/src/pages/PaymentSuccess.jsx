@@ -69,7 +69,7 @@ export default function PaymentSuccess() {
             <Link
               to="/dashboard"
               data-testid="go-to-dashboard-btn"
-              className="inline-flex items-center gap-2 bg-[#E28C22] text-[#0A0A0C] font-bold px-8 py-4 rounded-md hover:bg-[#F5A138]"
+              className="inline-flex items-center gap-2 btn-gradient font-bold px-8 py-4 rounded-md"
             >
               Back to studio <ArrowRight size={16} />
             </Link>
