@@ -716,6 +716,13 @@ async def create_checkout(
         raise HTTPException(status_code=400, detail="Invalid plan or billing")
     amount = float(plan[body.billing]["amount"])
 
+    # Apply discount code if present
+    discount_info = None
+    if body.discount_code:
+        amount, dc = await apply_discount_code(body.discount_code, body.plan, amount)
+        if dc:
+            discount_info = {"code": dc["code"], "percent": dc["percent"]}
+
     from emergentintegrations.payments.stripe.checkout import (
         StripeCheckout, CheckoutSessionRequest,
     )
