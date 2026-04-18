@@ -630,7 +630,7 @@ async def download_track(
     if not fmt:
         raise HTTPException(status_code=400, detail="Unknown format")
     tier = user.get("subscription_tier", "free")
-    if TIER_RANK[fmt["tier"]] > TIER_RANK[tier]:
+    if not is_admin(user) and TIER_RANK[fmt["tier"]] > TIER_RANK[tier]:
         raise HTTPException(
             status_code=402,
             detail=f"{fmt['label']} requires {fmt['tier'].capitalize()} tier. Upgrade to unlock.",

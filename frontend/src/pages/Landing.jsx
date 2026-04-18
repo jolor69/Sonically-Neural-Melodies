@@ -258,9 +258,9 @@ export default function Landing() {
             dialed in for real genres.
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
           {presets.map((p, i) => (
-            <div key={p.id} className="fade-up" style={{ animationDelay: `${i * 60}ms` }}>
+            <div key={p.id} className="fade-up h-full" style={{ animationDelay: `${i * 60}ms` }}>
               <PresetCard preset={p} onClick={() => {}} enableMiniPlayer sampleTitle={titleFor(p.id)} />
             </div>
           ))}
@@ -447,7 +447,7 @@ export default function Landing() {
               "30 exports / month",
               "WAV 16/24-bit · MP3 320k · FLAC",
               "All 8 presets + Intensity & EQ controls",
-              "Save 25 custom presets",
+              "LUFS targeting · 5-min max per track",
             ]}
             cta="Upgrade to Pro"
             ctaTo="/login?mode=signup"

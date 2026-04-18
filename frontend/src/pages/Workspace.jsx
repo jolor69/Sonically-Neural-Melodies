@@ -365,12 +365,11 @@ export default function Workspace() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
             {presets.map((p) => {
               const locked = presetLocked(p.id);
-              const targetNames = (p.targets || []).map((tid) => DSP_LABEL[tid]).filter(Boolean);
               return (
-                <div key={p.id} className="relative">
+                <div key={p.id} className="relative h-full">
                   <PresetCard
                     preset={p}
                     selected={p.id === selectedId}
@@ -385,20 +384,6 @@ export default function Workspace() {
                     compact
                     testId={`workspace-preset-${p.id}`}
                   />
-                  {/* LUFS + recommended target badge */}
-                  <div className="absolute top-3 right-3 flex flex-col items-end gap-1 pointer-events-none" data-testid={`preset-target-${p.id}`}>
-                    <span
-                      className="mono text-[10px] px-2 py-0.5 rounded bg-[#0A0A0C]/80 border"
-                      style={{ borderColor: `${p.color}66`, color: p.color }}
-                    >
-                      {p.lufs} LUFS
-                    </span>
-                    {targetNames.slice(0, 1).map((t) => (
-                      <span key={t} className="label-overline text-[8px] px-2 py-0.5 rounded bg-[#0A0A0C]/80 border border-[#2A2A35] text-[#9CA3AF]">
-                        ✓ {t}
-                      </span>
-                    ))}
-                  </div>
                   {locked && (
                     <div className="absolute inset-0 rounded-xl bg-[#0A0A0C]/70 flex items-center justify-center pointer-events-none" data-testid={`preset-lock-${p.id}`}>
                       <div className="flex flex-col items-center gap-2 label-overline text-[#E28C22]">

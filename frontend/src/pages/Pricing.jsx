@@ -172,7 +172,7 @@ export default function Pricing() {
               "30 exports / month",
               "WAV 16/24-bit · MP3 320k · FLAC",
               "All 8 presets + Intensity & EQ",
-              "Save 25 custom presets",
+              "LUFS targeting · 5-min max per track",
             ]}
             ctaLabel={user?.subscription_tier === "pro" ? "Current plan" : (busyPlan === "pro" ? "Redirecting…" : "Upgrade to Pro")}
             onCta={() => checkout("pro")}
