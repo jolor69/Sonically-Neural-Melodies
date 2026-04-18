@@ -27,7 +27,8 @@ export default function PayPalCheckoutButton({ plan, billing, discountCode, disa
   return (
     <div data-testid={`${testId}-paypal-wrapper`} className="w-full">
       <PayPalButtons
-        style={{ layout: "horizontal", color: "gold", shape: "rect", label: "paypal", height: 40, tagline: false }}
+        style={{ layout: "vertical", color: "gold", shape: "rect", label: "paypal", height: 44 }}
+        fundingSource="paypal"
         forceReRender={[plan, billing, discountCode]}
         createOrder={async () => {
           try {

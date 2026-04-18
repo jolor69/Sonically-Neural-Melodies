@@ -86,12 +86,12 @@ class ProcessRequest(BaseModel):
 # ---------------- PRICING ----------------
 PLANS = {
     "pro": {
-        "monthly": {"amount": 4.99, "label": "Pro Monthly"},
-        "yearly": {"amount": 44.99, "label": "Pro Yearly"},
+        "monthly": {"amount": 5.49, "label": "Pro Monthly"},
+        "yearly": {"amount": 49.49, "label": "Pro Yearly"},
     },
     "studio": {
-        "monthly": {"amount": 12.99, "label": "Studio Monthly"},
-        "yearly": {"amount": 119.99, "label": "Studio Yearly"},
+        "monthly": {"amount": 14.29, "label": "Studio Monthly"},
+        "yearly": {"amount": 131.99, "label": "Studio Yearly"},
     },
 }
 
@@ -854,6 +854,25 @@ async def payments_status(
                         "subscription_activated_at": iso(utcnow()),
                     }},
                 )
+                # Send receipt email (fire-and-forget, idempotent via receipt_sent flag)
+                if not tx.get("receipt_sent"):
+                    from emails import send_payment_receipt
+                    host_url = str(request.base_url).rstrip("/")
+                    await send_payment_receipt(
+                        to_email=user_doc.get("email") or tx.get("email"),
+                        name=user_doc.get("name", ""),
+                        plan=plan,
+                        billing=tx.get("billing", "monthly"),
+                        amount=float(tx.get("amount", 0)),
+                        currency=tx.get("currency", "usd"),
+                        provider="stripe",
+                        txn_id=session_id,
+                        app_url=host_url,
+                    )
+                    await db.payment_transactions.update_one(
+                        {"session_id": session_id},
+                        {"$set": {"receipt_sent": True, "receipt_sent_at": iso(utcnow())}},
+                    )
 
     return {
         "status": session_status,
@@ -965,6 +984,7 @@ async def paypal_create_order(
 @api.post("/payments/paypal/capture-order/{order_id}")
 async def paypal_capture_order(
     order_id: str,
+    request: Request,
     authorization: Optional[str] = Header(None),
     session_token: Optional[str] = Cookie(None),
 ):
@@ -1025,6 +1045,25 @@ async def paypal_capture_order(
                         "subscription_activated_at": iso(utcnow()),
                     }},
                 )
+                # Send receipt email (idempotent)
+                tx_latest = await db.payment_transactions.find_one({"session_id": order_id}, {"_id": 0})
+                if tx_latest and not tx_latest.get("receipt_sent"):
+                    from emails import send_payment_receipt
+                    await send_payment_receipt(
+                        to_email=user_doc.get("email") or tx.get("email"),
+                        name=user_doc.get("name", ""),
+                        plan=plan,
+                        billing=tx.get("billing", "monthly"),
+                        amount=float(tx.get("amount", 0)),
+                        currency=tx.get("currency", "usd"),
+                        provider="paypal",
+                        txn_id=order_id,
+                        app_url=str(request.base_url).rstrip("/"),
+                    )
+                    await db.payment_transactions.update_one(
+                        {"session_id": order_id},
+                        {"$set": {"receipt_sent": True, "receipt_sent_at": iso(utcnow())}},
+                    )
 
     return {
         "status": "complete" if is_paid else "open",

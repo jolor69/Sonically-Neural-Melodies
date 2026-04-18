@@ -106,7 +106,16 @@ export default function Pricing() {
                     : "text-white/70 hover:text-white"
                 }`}
               >
-                {b} {b === "yearly" && <span className="label-overline ml-2 text-[10px]">Save 25%</span>}
+                {b} {b === "yearly" && (
+                  <span
+                    className={`ml-2 text-[10px] font-bold tracking-widest ${
+                      billing === b ? "text-[#0A0A0C]" : "text-[#E28C22]"
+                    }`}
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    SAVE 25%
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -171,10 +180,10 @@ export default function Pricing() {
           <PriceCard
             name="Pro"
             tagline="Serious creators who release"
-            price={`$${applyDiscountPrice(billing === "yearly" ? 3.75 : 4.99)}`}
+            price={`$${applyDiscountPrice(billing === "yearly" ? 4.12 : 5.49)}`}
             period="/ month"
-            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(44.99)}/yr` : "Billed monthly"}
-            strike={discount ? (billing === "yearly" ? "$3.75" : "$4.99") : null}
+            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(49.49)}/yr` : "Billed monthly"}
+            strike={discount ? (billing === "yearly" ? "$4.12" : "$5.49") : null}
             highlight
             badge="Popular"
             features={[
@@ -201,10 +210,10 @@ export default function Pricing() {
           <PriceCard
             name="Studio"
             tagline="Labels, producers, multi-project"
-            price={`$${applyDiscountPrice(billing === "yearly" ? 9.99 : 12.99)}`}
+            price={`$${applyDiscountPrice(billing === "yearly" ? 11.00 : 14.29)}`}
             period="/ month"
-            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(119.99)}/yr` : "Billed monthly"}
-            strike={discount ? (billing === "yearly" ? "$9.99" : "$12.99") : null}
+            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(131.99)}/yr` : "Billed monthly"}
+            strike={discount ? (billing === "yearly" ? "$11.00" : "$14.29") : null}
             features={[
               "Unlimited exports",
               "Hi-res 24/96 & 24/192",
@@ -269,7 +278,10 @@ function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, o
       }`}
     >
       {badge && (
-        <div className="absolute -top-3 left-8 label-overline text-[10px] bg-[#E28C22] text-[#0A0A0C] px-3 py-1 rounded-full">
+        <div
+          className="absolute -top-3 left-8 text-[10px] tracking-widest uppercase font-black bg-[#E28C22] text-[#0A0A0C] px-3 py-1 rounded-full"
+          style={{ fontFamily: "'JetBrains Mono', monospace" }}
+        >
           {badge}
         </div>
       )}

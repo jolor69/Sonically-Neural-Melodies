@@ -176,7 +176,6 @@ export default function Landing() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0C]/60 via-[#0A0A0C]/80 to-[#0A0A0C]" />
         <div className="relative max-w-7xl mx-auto px-6 md:px-10 py-24 md:py-36">
-          <div className="label-overline mb-6 text-[#E28C22] fade-up">AI · Analog · Mastered</div>
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter max-w-4xl fade-up" style={{ fontFamily: "Outfit" }}>
             Master your sound <br />
             <span className="text-[#E28C22]">in under a minute.</span>
