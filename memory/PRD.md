@@ -46,7 +46,13 @@ Build an online audio mastering tool with:
 - Waveform peak extraction for A/B visualization
 - Per-tier monthly export quotas (5/30/∞)
 - Stripe checkout with polling + webhook + idempotent tier upgrade
+- Admin dashboard (`/admin`) for discount codes & tier track limits
+- CC-BY 4.0 music samples for preset previews; LUFS badges per preset
 - Demo user seeded on startup (demo@sonically.io / DemoUser123!)
+
+## Recent fixes (2026-02-18)
+- PaymentSuccess.jsx polling: extended MAX_ATTEMPTS to 25 with progressive backoff (~2 min total), so the success UI reliably transitions after Stripe checkout.
+- /api/payments/status/{session_id}: tier upgrade is now idempotent and runs in both the Stripe success path AND the "No such checkout.session" fallback path (previously the fallback path returned paid without upgrading). Verified via curl — user flipped free → pro on first poll.
 
 ## Test Results (iteration 1)
 - Backend: **30/30 tests passed**

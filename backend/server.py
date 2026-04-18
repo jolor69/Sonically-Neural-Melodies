@@ -787,51 +787,54 @@ async def payments_status(
     host_url = str(request.base_url).rstrip("/")
     StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")  # init side-effects
     import stripe
+    session = None
     try:
         session = stripe.checkout.Session.retrieve(session_id)
     except stripe.error.InvalidRequestError as e:
         # Emergent proxy returns 404 for sessions that haven't been interacted with yet.
-        # Treat as still-pending so the frontend keeps polling until the user completes checkout.
-        if "No such checkout.session" in str(e):
-            return {
-                "status": tx.get("status", "open"),
-                "payment_status": tx.get("payment_status", "pending"),
-                "amount_total": int(float(tx.get("amount", 0)) * 100),
-                "currency": tx.get("currency", "usd"),
-                "plan": tx.get("plan"),
-                "billing": tx.get("billing"),
-            }
-        logger.error(f"Stripe retrieve failed: {e}")
-        raise HTTPException(status_code=502, detail="Unable to fetch payment status")
+        # Fall back to our stored tx state (which may have been updated by the webhook).
+        if "No such checkout.session" not in str(e):
+            logger.error(f"Stripe retrieve failed: {e}")
+            raise HTTPException(status_code=502, detail="Unable to fetch payment status")
     except Exception as e:
         logger.error(f"Stripe retrieve failed: {e}")
         raise HTTPException(status_code=502, detail="Unable to fetch payment status")
 
-    session_status = getattr(session, "status", None) or "open"
-    payment_status = getattr(session, "payment_status", None) or "unpaid"
-    amount_total = getattr(session, "amount_total", None)
-    currency = getattr(session, "currency", None)
+    if session is not None:
+        session_status = getattr(session, "status", None) or "open"
+        payment_status = getattr(session, "payment_status", None) or "unpaid"
+        amount_total = getattr(session, "amount_total", None)
+        currency = getattr(session, "currency", None)
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {
+                "status": session_status,
+                "payment_status": payment_status,
+                "updated_at": iso(utcnow()),
+            }},
+        )
+    else:
+        # Fallback to stored tx state
+        session_status = tx.get("status", "open")
+        payment_status = tx.get("payment_status", "pending")
+        amount_total = int(float(tx.get("amount", 0)) * 100)
+        currency = tx.get("currency", "usd")
 
-    updates = {
-        "status": session_status,
-        "payment_status": payment_status,
-        "updated_at": iso(utcnow()),
-    }
-    await db.payment_transactions.update_one({"session_id": session_id}, {"$set": updates})
-
-    # Idempotent tier upgrade
-    if payment_status == "paid" and tx.get("payment_status") != "paid":
+    # Idempotent tier upgrade — runs whenever we detect paid, regardless of source
+    if payment_status == "paid":
         plan = tx.get("plan")
         if plan in ("pro", "studio"):
-            await db.users.update_one(
-                {"user_id": tx["user_id"]},
-                {"$set": {
-                    "subscription_tier": plan,
-                    "subscription_status": "active",
-                    "subscription_billing": tx.get("billing"),
-                    "subscription_activated_at": iso(utcnow()),
-                }},
-            )
+            user_doc = await db.users.find_one({"user_id": tx["user_id"]}, {"_id": 0})
+            if user_doc and user_doc.get("subscription_tier") != plan:
+                await db.users.update_one(
+                    {"user_id": tx["user_id"]},
+                    {"$set": {
+                        "subscription_tier": plan,
+                        "subscription_status": "active",
+                        "subscription_billing": tx.get("billing"),
+                        "subscription_activated_at": iso(utcnow()),
+                    }},
+                )
 
     return {
         "status": session_status,
