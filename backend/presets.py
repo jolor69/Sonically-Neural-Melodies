@@ -8,6 +8,8 @@ PRESETS = [
         "icon": "Globe",
         "genres": ["Rock", "Pop", "Electronic", "Alternative"],
         "description": "Natural dynamic and tonal balancing.",
+        "lufs": -14,
+        "targets": ["streaming", "youtube"],
         # Gentle EQ lift + moderate compression + -14 LUFS target
         "filter": (
             "equalizer=f=80:t=q:w=1:g=1.5,"
@@ -24,6 +26,8 @@ PRESETS = [
         "icon": "Flame",
         "genres": ["Trap", "Experimental", "Reggaeton"],
         "description": "Punchy lows and midrange clarity.",
+        "lufs": -9,
+        "targets": ["mastering"],
         "filter": (
             "equalizer=f=60:t=q:w=1.1:g=3.5,"
             "equalizer=f=200:t=q:w=1:g=-1.5,"
@@ -39,6 +43,8 @@ PRESETS = [
         "icon": "Sparkles",
         "genres": ["Classical", "R&B", "Singer-songwriter"],
         "description": "Pristine highs with light dynamic expansion.",
+        "lufs": -16,
+        "targets": ["apple_music"],
         "filter": (
             "equalizer=f=120:t=q:w=1:g=-1,"
             "equalizer=f=4000:t=q:w=1.5:g=2,"
@@ -54,6 +60,8 @@ PRESETS = [
         "icon": "Radio",
         "genres": ["Jazz", "Alternative", "Indie", "Rock"],
         "description": "Warm saturation with analog dynamics.",
+        "lufs": -13,
+        "targets": ["youtube", "mastering"],
         "filter": (
             "equalizer=f=100:t=q:w=1:g=2,"
             "equalizer=f=8000:t=q:w=1:g=-1.5,"
@@ -69,6 +77,8 @@ PRESETS = [
         "icon": "Leaf",
         "genres": ["Acoustic", "Jazz", "Singer-songwriter"],
         "description": "Balanced dynamics and gentle compression.",
+        "lufs": -16,
+        "targets": ["apple_music", "broadcast"],
         "filter": (
             "equalizer=f=200:t=q:w=1:g=0.8,"
             "equalizer=f=5000:t=q:w=1:g=0.8,"
@@ -83,6 +93,8 @@ PRESETS = [
         "icon": "Orbit",
         "genres": ["Ambient", "Experimental", "Electronic"],
         "description": "Atmospheric reverb and enhanced stereo width.",
+        "lufs": -14,
+        "targets": ["streaming", "youtube"],
         "filter": (
             "equalizer=f=5000:t=q:w=1:g=1.5,"
             "extrastereo=m=1.6,"
@@ -98,6 +110,8 @@ PRESETS = [
         "icon": "Film",
         "genres": ["Soundtrack", "Orchestral", "Classical"],
         "description": "Intense saturation and harmonic distortion.",
+        "lufs": -12,
+        "targets": ["mastering"],
         "filter": (
             "equalizer=f=60:t=q:w=1:g=2.5,"
             "equalizer=f=400:t=q:w=1:g=-2,"
@@ -113,6 +127,8 @@ PRESETS = [
         "icon": "Zap",
         "genres": ["Hip Hop", "Trap", "R&B"],
         "description": "Energetic bass combined with boosted highs.",
+        "lufs": -10,
+        "targets": ["mastering"],
         "filter": (
             "equalizer=f=50:t=q:w=1:g=4,"
             "equalizer=f=250:t=q:w=1:g=-2,"

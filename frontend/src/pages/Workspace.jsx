@@ -40,8 +40,9 @@ export default function Workspace() {
 
   const userTier = user?.subscription_tier || "free";
   const userTierRank = TIER_RANK[userTier] ?? 0;
-  const isFree = userTier === "free";
-  const advUnlocked = !isFree;
+  const isAdmin = !!user?.is_admin;
+  const isFree = !isAdmin && userTier === "free";
+  const advUnlocked = isAdmin || !isFree;
 
   useEffect(() => {
     api.get(`/tracks/${trackId}`).then((r) => {
@@ -109,7 +110,7 @@ export default function Workspace() {
     if (!track?.status || track.status !== "mastered") return;
     const fmt = formats.find((f) => f.id === formatId);
     if (!fmt) return;
-    if ((TIER_RANK[fmt.tier] ?? 0) > userTierRank) {
+    if (!isAdmin && (TIER_RANK[fmt.tier] ?? 0) > userTierRank) {
       toast.error(`${fmt.label} requires ${fmt.tier.toUpperCase()} tier`);
       navigate("/pricing");
       return;
@@ -182,7 +183,7 @@ export default function Workspace() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-[#2A2A35]" />
                 {formats.map((f) => {
-                  const locked = (TIER_RANK[f.tier] ?? 0) > userTierRank;
+                  const locked = !isAdmin && (TIER_RANK[f.tier] ?? 0) > userTierRank;
                   return (
                     <DropdownMenuItem
                       key={f.id}
@@ -323,7 +324,7 @@ export default function Workspace() {
 
         {/* Preset picker */}
         <section>
-          <div className="flex items-end justify-between mb-6">
+          <div className="flex items-end justify-between mb-4">
             <div>
               <div className="label-overline mb-2">/ Pick a preset</div>
               <h2 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "Outfit" }}>
@@ -344,9 +345,30 @@ export default function Workspace() {
               </div>
             )}
           </div>
+
+          {/* DSP RELEASE GUIDE */}
+          <div className="bg-[#121216] border border-[#2A2A35] rounded-xl p-4 mb-6" data-testid="dsp-release-guide">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={14} className="text-[#E28C22]" />
+              <span className="label-overline">DSP release · LUFS targeting</span>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {DSP_TARGETS.map((t) => (
+                <div key={t.id} className="flex items-start gap-2" data-testid={`dsp-target-${t.id}`}>
+                  <span className="mono text-[10px] mt-0.5 text-[#E28C22] shrink-0">{t.lufs}</span>
+                  <div>
+                    <div className="font-semibold text-white">{t.name}</div>
+                    <div className="text-[#9CA3AF] text-[10px]">{t.note}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {presets.map((p) => {
               const locked = presetLocked(p.id);
+              const targetNames = (p.targets || []).map((tid) => DSP_LABEL[tid]).filter(Boolean);
               return (
                 <div key={p.id} className="relative">
                   <PresetCard
@@ -363,6 +385,20 @@ export default function Workspace() {
                     compact
                     testId={`workspace-preset-${p.id}`}
                   />
+                  {/* LUFS + recommended target badge */}
+                  <div className="absolute top-3 right-3 flex flex-col items-end gap-1 pointer-events-none" data-testid={`preset-target-${p.id}`}>
+                    <span
+                      className="mono text-[10px] px-2 py-0.5 rounded bg-[#0A0A0C]/80 border"
+                      style={{ borderColor: `${p.color}66`, color: p.color }}
+                    >
+                      {p.lufs} LUFS
+                    </span>
+                    {targetNames.slice(0, 1).map((t) => (
+                      <span key={t} className="label-overline text-[8px] px-2 py-0.5 rounded bg-[#0A0A0C]/80 border border-[#2A2A35] text-[#9CA3AF]">
+                        ✓ {t}
+                      </span>
+                    ))}
+                  </div>
                   {locked && (
                     <div className="absolute inset-0 rounded-xl bg-[#0A0A0C]/70 flex items-center justify-center pointer-events-none" data-testid={`preset-lock-${p.id}`}>
                       <div className="flex flex-col items-center gap-2 label-overline text-[#E28C22]">
@@ -380,6 +416,21 @@ export default function Workspace() {
     </div>
   );
 }
+
+const DSP_TARGETS = [
+  { id: "streaming", name: "Spotify · Apple Music", lufs: "-14 LUFS", note: "Streaming standard" },
+  { id: "youtube", name: "YouTube", lufs: "-13 to -15", note: "Video platforms" },
+  { id: "broadcast", name: "TV · Radio Broadcast", lufs: "-23 LUFS", note: "EBU R128 compliance" },
+  { id: "mastering", name: "Mastering Target", lufs: "-8 to -12", note: "Loud club / hip-hop" },
+];
+
+const DSP_LABEL = {
+  streaming: "Streaming",
+  youtube: "YouTube",
+  broadcast: "Broadcast",
+  apple_music: "Apple Music",
+  mastering: "Master",
+};
 
 function LockBadge() {
   return (
