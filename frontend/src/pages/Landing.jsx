@@ -252,8 +252,31 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-[#2A2A35] py-10 text-center text-sm text-[#9CA3AF]">
-        <div className="label-overline">Sonically © 2026 — Mastered in analog spirit</div>
+      <footer className="border-t border-[#2A2A35] py-12" data-testid="landing-footer">
+        <div className="max-w-7xl mx-auto px-6 md:px-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-white rounded-xl p-2 flex items-center justify-center" style={{ width: 64, height: 64 }}>
+              <img
+                src="https://customer-assets.emergentagent.com/job_audio-enhance-34/artifacts/zn8793na_Neural%20Logo.JPG"
+                alt="Neural Melodies"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="label-overline text-[#A855F7]">A Neural Melodies product</span>
+              <span className="text-lg font-bold mt-1" style={{ fontFamily: "Outfit" }}>
+                Sonically is crafted by <span className="text-[#A855F7]">Neural Melodies</span>
+              </span>
+              <span className="text-xs text-[#9CA3AF] mt-1">Pushing music forward with neural audio tools.</span>
+            </div>
+          </div>
+          <div className="text-center md:text-right">
+            <div className="label-overline">Sonically © 2026 — Mastered in analog spirit</div>
+            <div className="text-xs text-[#9CA3AF] mt-2">
+              © Neural Melodies. All rights reserved.
+            </div>
+          </div>
+        </div>
       </footer>
     </div>
   );

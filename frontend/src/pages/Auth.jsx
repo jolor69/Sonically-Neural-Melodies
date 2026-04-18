@@ -63,9 +63,14 @@ export default function Auth() {
             <div className="w-9 h-9 rounded-md bg-[#E28C22] flex items-center justify-center text-[#0A0A0C]">
               <Music4 size={20} strokeWidth={2.5} />
             </div>
-            <span className="text-2xl font-black tracking-tight" style={{ fontFamily: "Outfit" }}>
-              Sonically
-            </span>
+            <div className="flex flex-col leading-none">
+              <span className="text-2xl font-black tracking-tight" style={{ fontFamily: "Outfit" }}>
+                Sonically
+              </span>
+              <span className="label-overline text-[9px] mt-0.5 text-[#A855F7]">
+                by Neural Melodies
+              </span>
+            </div>
           </Link>
         </div>
 
@@ -94,6 +99,21 @@ export default function Auth() {
                 />
               );
             })}
+          </div>
+
+          {/* Neural Melodies attribution */}
+          <div className="mt-10 flex items-center gap-3 border-t border-[#2A2A35] pt-6" data-testid="auth-neural-melodies-brand">
+            <div className="bg-white rounded-lg p-1.5 flex items-center justify-center shrink-0" style={{ width: 48, height: 48 }}>
+              <img
+                src="https://customer-assets.emergentagent.com/job_audio-enhance-34/artifacts/zn8793na_Neural%20Logo.JPG"
+                alt="Neural Melodies"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="label-overline text-[10px] text-[#A855F7]">A Neural Melodies product</span>
+              <span className="text-sm text-[#9CA3AF]">Pushing music forward with neural audio tools.</span>
+            </div>
           </div>
         </div>
       </div>
