@@ -65,6 +65,13 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 10 — Deployment fixes (2026-02-18)
+- **CRITICAL BLOCKER fixed**: `.gitignore` had 4 duplicated blocks of `.env` / `.env.*` / `*.env` patterns that prevented Emergent's deploy pipeline from finding/updating env files for the production container. Cleaned up to a single, commented section that explicitly notes .env files are committed (secrets stay in deployment env vars, not the repo).
+- **MongoDB Atlas resilience**: motor `AsyncIOMotorClient` now uses `serverSelectionTimeoutMS=10_000`, `connectTimeoutMS=10_000`, `socketTimeoutMS=30_000`, `retryWrites=True`, `retryReads=True` — fixes raw `NetworkTimeout` traces on Atlas cold-start / SRV-DNS slowness.
+- **Global exception handlers**: `NetworkTimeout` / `ServerSelectionTimeoutError` / generic `PyMongoError` now return a clean `503 {"detail": "Database temporarily unreachable. Please retry in a moment."}` instead of leaking a raw pymongo stacktrace back to the user.
+- **Health endpoint**: `/api/health` returns `{status: ok, db: up}` — usable as a readiness probe.
+- **User action**: Redeploy required. If the NetworkTimeout recurs post-redeploy, verify the Atlas cluster's **Network Access** list includes `0.0.0.0/0` (or your deployment's egress CIDR) — Atlas IP whitelist is the only remaining non-code variable.
+
 ## Iteration 9 — httpOnly cookie migration + Donasi link (2026-02-18)
 - **httpOnly auth cookie**:
   - Added lightweight middleware in `server.py` that translates the `auth_token` httpOnly cookie into an Authorization Bearer header if the request doesn't already have one. Zero changes to the ~40 protected endpoints.

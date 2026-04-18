@@ -30,13 +30,46 @@ from auth import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 logger = logging.getLogger("sonically")
 
-# MongoDB
+# MongoDB — configured with Atlas-friendly timeouts so a slow first connection
+# (SRV DNS, TLS handshake, primary election) doesn't hang requests. Motor/pymongo
+# defaults to 30s serverSelectionTimeoutMS which is too tight for cold starts.
 mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=10_000,
+    connectTimeoutMS=10_000,
+    socketTimeoutMS=30_000,
+    retryWrites=True,
+    retryReads=True,
+)
 db = client[os.environ["DB_NAME"]]
 
 app = FastAPI(title="Sonically API")
 api = APIRouter(prefix="/api")
+
+
+# ---------------- GLOBAL EXCEPTION HANDLERS ----------------
+from pymongo.errors import PyMongoError, NetworkTimeout, ServerSelectionTimeoutError
+from fastapi.responses import JSONResponse as _JSONResponse
+
+
+@app.exception_handler(NetworkTimeout)
+@app.exception_handler(ServerSelectionTimeoutError)
+async def _mongo_timeout_handler(request, exc):
+    logger.error(f"MongoDB timeout on {request.method} {request.url.path}: {exc}")
+    return _JSONResponse(
+        status_code=503,
+        content={"detail": "Database temporarily unreachable. Please retry in a moment."},
+    )
+
+
+@app.exception_handler(PyMongoError)
+async def _mongo_generic_handler(request, exc):
+    logger.error(f"MongoDB error on {request.method} {request.url.path}: {type(exc).__name__}: {exc}")
+    return _JSONResponse(
+        status_code=503,
+        content={"detail": "Database error. Please retry in a moment."},
+    )
 
 
 # ---------------- AUTH MIDDLEWARE ----------------
@@ -276,6 +309,19 @@ def iso(dt: datetime) -> str:
 @api.get("/")
 async def root():
     return {"app": "Sonically", "status": "ok"}
+
+
+@api.get("/health")
+async def health():
+    """Lightweight health check for deployment readiness probes.
+    Confirms the backend is serving AND MongoDB is reachable."""
+    try:
+        await client.admin.command("ping")
+        db_ok = True
+    except Exception as e:
+        logger.error(f"Health check DB ping failed: {e}")
+        db_ok = False
+    return {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
 
 
 @api.get("/presets")

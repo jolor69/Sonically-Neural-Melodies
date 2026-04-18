@@ -30,8 +30,7 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
-
+# Credential files
 *token.json*
 *credentials.json*
 
@@ -79,39 +78,9 @@ agenthub/agents/youtube/db
 memory/test_credentials.md
 
 # Mobile development
-android-sdk/-e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
+android-sdk/
+
+# NOTE: .env files are intentionally committed for Emergent deployments.
+# The deploy pipeline rewrites MONGO_URL / REACT_APP_BACKEND_URL / etc. at build time.
+# Real secrets (Stripe/PayPal/Resend keys) are set via deployment environment variables,
+# not committed to the repo.
