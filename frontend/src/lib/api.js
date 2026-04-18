@@ -22,3 +22,10 @@ export const streamUrl = (trackId, which) => {
   const qs = token ? `?token=${encodeURIComponent(token)}` : "";
   return `${API}/tracks/${trackId}/stream/${which}${qs}`;
 };
+
+export const downloadUrl = (trackId, format) => {
+  const token = localStorage.getItem("auth_token");
+  const params = new URLSearchParams({ format });
+  if (token) params.set("token", token);
+  return `${API}/tracks/${trackId}/download?${params.toString()}`;
+};

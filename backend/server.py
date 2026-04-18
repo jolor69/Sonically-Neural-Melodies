@@ -90,6 +90,54 @@ TIER_LIMITS = {
 
 ALLOWED_EXT = {"wav", "mp3", "flac", "m4a", "aac", "ogg"}
 
+# Download format definitions: format_id -> (ffmpeg args, file ext, content-type, display label, required tier)
+# Tier ranking: free=0, pro=1, studio=2
+TIER_RANK = {"free": 0, "pro": 1, "studio": 2}
+DOWNLOAD_FORMATS = {
+    "wav16": {
+        "label": "WAV 16-bit · 44.1kHz",
+        "ext": "wav",
+        "mime": "audio/wav",
+        "ffmpeg_args": ["-acodec", "pcm_s16le", "-ar", "44100"],
+        "tier": "free",
+    },
+    "mp3": {
+        "label": "MP3 320 kbps",
+        "ext": "mp3",
+        "mime": "audio/mpeg",
+        "ffmpeg_args": ["-acodec", "libmp3lame", "-b:a", "320k", "-ar", "44100"],
+        "tier": "pro",
+    },
+    "flac": {
+        "label": "FLAC · lossless",
+        "ext": "flac",
+        "mime": "audio/flac",
+        "ffmpeg_args": ["-acodec", "flac", "-ar", "44100"],
+        "tier": "pro",
+    },
+    "wav24": {
+        "label": "WAV 24-bit · 44.1kHz",
+        "ext": "wav",
+        "mime": "audio/wav",
+        "ffmpeg_args": ["-acodec", "pcm_s24le", "-ar", "44100"],
+        "tier": "pro",
+    },
+    "wav24_96": {
+        "label": "WAV 24/96 · Hi-Res",
+        "ext": "wav",
+        "mime": "audio/wav",
+        "ffmpeg_args": ["-acodec", "pcm_s24le", "-ar", "96000"],
+        "tier": "studio",
+    },
+    "wav24_192": {
+        "label": "WAV 24/192 · Hi-Res",
+        "ext": "wav",
+        "mime": "audio/wav",
+        "ffmpeg_args": ["-acodec", "pcm_s24le", "-ar", "192000"],
+        "tier": "studio",
+    },
+}
+
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -112,7 +160,23 @@ async def list_presets():
 
 @api.get("/plans")
 async def list_plans():
-    return {"plans": PLANS, "tier_limits": TIER_LIMITS}
+    # Expose available download formats per tier
+    tier_formats = {}
+    for tier, rank in TIER_RANK.items():
+        tier_formats[tier] = [
+            {"id": fid, "label": f["label"], "tier": f["tier"]}
+            for fid, f in DOWNLOAD_FORMATS.items()
+            if TIER_RANK[f["tier"]] <= rank
+        ]
+    return {
+        "plans": PLANS,
+        "tier_limits": TIER_LIMITS,
+        "download_formats": [
+            {"id": fid, "label": f["label"], "ext": f["ext"], "tier": f["tier"]}
+            for fid, f in DOWNLOAD_FORMATS.items()
+        ],
+        "tier_formats": tier_formats,
+    }
 
 
 # ---------------- AUTH ----------------
@@ -421,6 +485,62 @@ async def stream_track(
         raise HTTPException(status_code=400, detail="Invalid which")
     data, content_type = get_object(path)
     return StreamingResponse(BytesIO(data), media_type=content_type or "audio/wav")
+
+
+@api.get("/tracks/{track_id}/download")
+async def download_track(
+    track_id: str,
+    format: str = "wav16",
+    token: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    auth = authorization or (f"Bearer {token}" if token else None)
+    user = await resolve_user(db, auth, session_token)
+    fmt = DOWNLOAD_FORMATS.get(format)
+    if not fmt:
+        raise HTTPException(status_code=400, detail="Unknown format")
+    tier = user.get("subscription_tier", "free")
+    if TIER_RANK[fmt["tier"]] > TIER_RANK[tier]:
+        raise HTTPException(
+            status_code=402,
+            detail=f"{fmt['label']} requires {fmt['tier'].capitalize()} tier. Upgrade to unlock.",
+        )
+    track = await db.tracks.find_one(
+        {"track_id": track_id, "user_id": user["user_id"], "is_deleted": False},
+        {"_id": 0},
+    )
+    if not track or not track.get("storage_path_mastered"):
+        raise HTTPException(status_code=404, detail="No mastered file. Run mastering first.")
+
+    mastered_bytes, _ = get_object(track["storage_path_mastered"])
+
+    # Re-encode to target format via ffmpeg
+    import subprocess, tempfile
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fin:
+        fin.write(mastered_bytes)
+        in_path = fin.name
+    out_path = in_path + f".out.{fmt['ext']}"
+    try:
+        cmd = ["ffmpeg", "-y", "-i", in_path, *fmt["ffmpeg_args"], out_path]
+        r = subprocess.run(cmd, capture_output=True, timeout=300)
+        if r.returncode != 0:
+            logger.error(f"Encode failed: {r.stderr.decode('utf-8', errors='ignore')[-400:]}")
+            raise HTTPException(status_code=500, detail="Encoding failed")
+        with open(out_path, "rb") as f:
+            out_bytes = f.read()
+    finally:
+        for p in (in_path, out_path):
+            try: os.unlink(p)
+            except OSError: pass
+
+    safe_name = (track["original_filename"].rsplit(".", 1)[0] or "master")[:80]
+    download_name = f"{safe_name}_mastered_{format}.{fmt['ext']}"
+    return StreamingResponse(
+        BytesIO(out_bytes),
+        media_type=fmt["mime"],
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
 
 
 @api.delete("/tracks/{track_id}")

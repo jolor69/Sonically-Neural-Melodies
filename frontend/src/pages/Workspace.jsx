@@ -3,15 +3,26 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import PresetCard from "../components/PresetCard";
 import Waveform from "../components/Waveform";
-import { api, streamUrl } from "../lib/api";
-import { ArrowLeft, Download, Loader2, Play, Pause, Wand2 } from "lucide-react";
+import { api, streamUrl, downloadUrl } from "../lib/api";
+import { ArrowLeft, Download, Loader2, Play, Pause, Wand2, Lock, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
 
 export default function Workspace() {
   const { trackId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [track, setTrack] = useState(null);
   const [presets, setPresets] = useState([]);
+  const [formats, setFormats] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [playing, setPlaying] = useState(null); // "original" | "mastered" | null
@@ -24,6 +35,7 @@ export default function Workspace() {
       if (r.data.preset_id) setSelectedId(r.data.preset_id);
     }).catch(() => { toast.error("Track not found"); navigate("/dashboard"); });
     api.get("/presets").then((r) => setPresets(r.data.presets)).catch(() => {});
+    api.get("/plans").then((r) => setFormats(r.data.download_formats || [])).catch(() => {});
   }, [trackId, navigate]);
 
   const process = async () => {
@@ -62,13 +74,22 @@ export default function Workspace() {
     }
   };
 
-  const download = () => {
+  const TIER_RANK = { free: 0, pro: 1, studio: 2 };
+  const userTierRank = TIER_RANK[user?.subscription_tier || "free"] ?? 0;
+
+  const download = (formatId) => {
     if (!track?.status || track.status !== "mastered") return;
-    const token = localStorage.getItem("auth_token");
-    const url = streamUrl(trackId, "mastered");
+    const fmt = formats.find((f) => f.id === formatId);
+    if (!fmt) return;
+    if ((TIER_RANK[fmt.tier] ?? 0) > userTierRank) {
+      toast.error(`${fmt.label} requires ${fmt.tier.toUpperCase()} tier`);
+      navigate("/pricing");
+      return;
+    }
+    const url = downloadUrl(trackId, formatId);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${track.original_filename.replace(/\.[^.]+$/, "")}_mastered.wav`;
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -113,14 +134,50 @@ export default function Workspace() {
               {processing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
               {processing ? "Mastering…" : (track.status === "mastered" ? "Re-master" : "Master track")}
             </button>
-            <button
-              onClick={download}
-              disabled={track.status !== "mastered"}
-              data-testid="download-btn"
-              className="border border-[#2A2A35] px-6 py-3 rounded-md hover:border-[#E28C22] hover:text-[#E28C22] transition inline-flex items-center gap-2 disabled:opacity-40"
-            >
-              <Download size={16} /> Download WAV
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  disabled={track.status !== "mastered"}
+                  data-testid="download-btn"
+                  className="border border-[#2A2A35] px-6 py-3 rounded-md hover:border-[#E28C22] hover:text-[#E28C22] transition inline-flex items-center gap-2 disabled:opacity-40 disabled:hover:border-[#2A2A35] disabled:hover:text-white"
+                >
+                  <Download size={16} /> Download <ChevronDown size={14} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="bg-[#121216] border border-[#2A2A35] text-white min-w-[260px]"
+                align="end"
+                data-testid="download-format-menu"
+              >
+                <DropdownMenuLabel className="label-overline text-[10px]">
+                  Export format
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-[#2A2A35]" />
+                {formats.map((f) => {
+                  const locked = (TIER_RANK[f.tier] ?? 0) > userTierRank;
+                  return (
+                    <DropdownMenuItem
+                      key={f.id}
+                      onSelect={(e) => { e.preventDefault(); download(f.id); }}
+                      data-testid={`download-format-${f.id}`}
+                      className={`flex items-center justify-between gap-4 px-3 py-2.5 rounded-sm cursor-pointer focus:bg-[#1A1A20] focus:text-white ${locked ? "opacity-60" : ""}`}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{f.label}</span>
+                        <span className="label-overline text-[9px] mt-0.5">.{f.ext}</span>
+                      </div>
+                      {locked ? (
+                        <span className="inline-flex items-center gap-1 label-overline text-[10px] text-[#E28C22]">
+                          <Lock size={11} /> {f.tier}
+                        </span>
+                      ) : (
+                        <span className="label-overline text-[10px] text-[#10B981]">Ready</span>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
