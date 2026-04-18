@@ -1,0 +1,102 @@
+"""Audio processing engine: applies mastering presets via ffmpeg subprocess."""
+import os
+import subprocess
+import tempfile
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def apply_preset(input_bytes: bytes, input_ext: str, filter_chain: str, output_ext: str = "wav") -> bytes:
+    """Apply ffmpeg filter chain to audio bytes and return processed bytes."""
+    with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
+        fin.write(input_bytes)
+        input_path = fin.name
+    output_path = input_path + f".out.{output_ext}"
+    try:
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-af", filter_chain,
+            "-ar", "44100",
+            output_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            err = result.stderr.decode("utf-8", errors="ignore")[-500:]
+            logger.error(f"ffmpeg failed: {err}")
+            raise RuntimeError(f"Audio processing failed: {err}")
+        with open(output_path, "rb") as f:
+            return f.read()
+    finally:
+        for p in (input_path, output_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
+def probe_duration(input_bytes: bytes, input_ext: str) -> float:
+    """Return duration in seconds using ffprobe."""
+    with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
+        fin.write(input_bytes)
+        path = fin.name
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, timeout=60,
+        )
+        if result.returncode == 0:
+            try:
+                return float(result.stdout.decode().strip())
+            except ValueError:
+                return 0.0
+        return 0.0
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def waveform_peaks(input_bytes: bytes, input_ext: str, num_points: int = 120) -> list:
+    """Extract simple peak data for waveform visualization."""
+    with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
+        fin.write(input_bytes)
+        in_path = fin.name
+    raw_path = in_path + ".raw"
+    try:
+        # Convert to 8kHz mono PCM s16le for fast peak extraction
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", in_path, "-ac", "1", "-ar", "8000",
+             "-f", "s16le", raw_path],
+            capture_output=True, timeout=120,
+        )
+        import struct
+        with open(raw_path, "rb") as f:
+            data = f.read()
+        samples = struct.unpack(f"<{len(data)//2}h", data)
+        if not samples:
+            return [0.0] * num_points
+        chunk_size = max(1, len(samples) // num_points)
+        peaks = []
+        for i in range(num_points):
+            start = i * chunk_size
+            end = min(start + chunk_size, len(samples))
+            if start >= end:
+                peaks.append(0.0)
+                continue
+            chunk = samples[start:end]
+            peak = max(abs(s) for s in chunk) / 32768.0
+            peaks.append(round(peak, 3))
+        return peaks
+    except Exception as e:
+        logger.warning(f"waveform extraction failed: {e}")
+        return [0.0] * num_points
+    finally:
+        for p in (in_path, raw_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass

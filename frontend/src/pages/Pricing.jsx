@@ -1,0 +1,157 @@
+import React, { useEffect, useState } from "react";
+import Navbar from "../components/Navbar";
+import { Check, ArrowRight, Loader2, CircleAlert } from "lucide-react";
+import { api } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
+
+export default function Pricing() {
+  const { user, refresh } = useAuth();
+  const [billing, setBilling] = useState("yearly");
+  const [busyPlan, setBusyPlan] = useState(null);
+
+  useEffect(() => { refresh?.(); }, []);
+
+  const checkout = async (plan) => {
+    setBusyPlan(plan);
+    try {
+      const origin_url = window.location.origin;
+      const r = await api.post("/payments/checkout", { plan, billing, origin_url });
+      window.location.href = r.data.url;
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Checkout failed");
+      setBusyPlan(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0A0A0C] text-white">
+      <Navbar />
+      <main className="max-w-7xl mx-auto px-6 md:px-10 py-16">
+        <div className="text-center">
+          <div className="label-overline mb-3">/ Plans</div>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-4" style={{ fontFamily: "Outfit" }}>
+            Plans for every stage.
+          </h1>
+          <p className="text-[#9CA3AF] max-w-xl mx-auto mb-10">
+            {user?.subscription_tier && user.subscription_tier !== "free"
+              ? `You're on ${user.subscription_tier}. Thanks for supporting Sonically.`
+              : "Start free. Upgrade whenever you need more exports or higher resolution output."}
+          </p>
+        </div>
+
+        <div className="flex justify-center mb-12">
+          <div className="inline-flex items-center gap-1 bg-[#121216] border border-[#2A2A35] rounded-full p-1" data-testid="pricing-billing-toggle">
+            {["monthly", "yearly"].map((b) => (
+              <button
+                key={b}
+                onClick={() => setBilling(b)}
+                data-testid={`pricing-billing-${b}`}
+                className={`px-5 py-2 rounded-full text-sm font-semibold capitalize transition ${
+                  billing === b
+                    ? "bg-[#E28C22] text-[#0A0A0C]"
+                    : "text-white/70 hover:text-white"
+                }`}
+              >
+                {b} {b === "yearly" && <span className="label-overline ml-2 text-[10px]">Save 25%</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          <PriceCard
+            name="Free"
+            tagline="Try it out, hobby sketches"
+            price="$0"
+            period=""
+            features={["5 exports / month", "WAV 16-bit", "All 8 presets", "LUFS normalize basic"]}
+            ctaLabel={user?.subscription_tier === "free" ? "Current plan" : "Downgrade coming soon"}
+            disabled
+            testId="plan-free"
+          />
+          <PriceCard
+            name="Pro"
+            tagline="Serious creators who release"
+            price={billing === "yearly" ? "$3.75" : "$4.99"}
+            period="/ month"
+            billed={billing === "yearly" ? "Billed $44.99/yr" : "Billed monthly"}
+            highlight
+            badge="Popular"
+            features={["30 exports / month", "WAV 16/24-bit, MP3 320k, FLAC", "Target LUFS per platform", "Save 25 presets"]}
+            ctaLabel={user?.subscription_tier === "pro" ? "Current plan" : (busyPlan === "pro" ? "Redirecting…" : "Upgrade to Pro")}
+            onCta={() => checkout("pro")}
+            disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}
+            loading={busyPlan === "pro"}
+            testId="plan-pro"
+          />
+          <PriceCard
+            name="Studio"
+            tagline="Labels, producers, multi-project"
+            price={billing === "yearly" ? "$9.99" : "$12.99"}
+            period="/ month"
+            billed={billing === "yearly" ? "Billed $119.99/yr" : "Billed monthly"}
+            features={["Unlimited exports", "Hi-res 24/96 & 24/192", "Unlimited presets", "Priority support"]}
+            ctaLabel={user?.subscription_tier === "studio" ? "Current plan" : (busyPlan === "studio" ? "Redirecting…" : "Upgrade to Studio")}
+            onCta={() => checkout("studio")}
+            disabled={user?.subscription_tier === "studio" || busyPlan === "studio"}
+            loading={busyPlan === "studio"}
+            testId="plan-studio"
+          />
+        </div>
+
+        <div className="mt-12 text-center bg-[#121216] border border-[#2A2A35] rounded-xl p-6 max-w-3xl mx-auto flex items-center gap-3 justify-center text-sm text-[#9CA3AF]">
+          <CircleAlert size={16} className="text-[#E28C22]" />
+          <span>
+            <span className="font-semibold text-white">Stripe</span> checkout is live. PayPal support is coming soon.
+          </span>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, onCta, disabled, loading, highlight, badge, testId }) {
+  return (
+    <div
+      data-testid={testId}
+      className={`relative bg-[#121216] border rounded-2xl p-8 flex flex-col ${
+        highlight ? "border-[#E28C22]" : "border-[#2A2A35]"
+      }`}
+    >
+      {badge && (
+        <div className="absolute -top-3 left-8 label-overline text-[10px] bg-[#E28C22] text-[#0A0A0C] px-3 py-1 rounded-full">
+          {badge}
+        </div>
+      )}
+      <div className="text-3xl font-bold" style={{ fontFamily: "Outfit" }}>{name}</div>
+      <div className="text-[#9CA3AF] text-sm mt-1">{tagline}</div>
+      <div className="mt-6 flex items-end gap-1">
+        <span className="text-5xl font-black" style={{ fontFamily: "Outfit" }}>{price}</span>
+        {period && <span className="text-[#9CA3AF] mb-2">{period}</span>}
+      </div>
+      {billed && <div className="label-overline mt-1 text-[10px]">{billed}</div>}
+      <ul className="mt-8 space-y-3 text-sm flex-1">
+        {features.map((f) => (
+          <li key={f} className="flex items-start gap-2">
+            <Check size={16} className="mt-1 text-[#E28C22] shrink-0" />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+      <button
+        onClick={onCta}
+        disabled={disabled}
+        data-testid={`${testId}-cta`}
+        className={`mt-8 text-center font-semibold px-6 py-3 rounded-md transition inline-flex items-center justify-center gap-2 ${
+          highlight && !disabled
+            ? "bg-[#E28C22] text-[#0A0A0C] hover:bg-[#F5A138]"
+            : "border border-[#2A2A35] hover:border-[#E28C22] hover:text-[#E28C22]"
+        } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+      >
+        {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+        {ctaLabel} {highlight && !disabled && !loading && <ArrowRight size={14} />}
+      </button>
+    </div>
+  );
+}
