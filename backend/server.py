@@ -13,6 +13,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 from io import BytesIO
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -63,6 +64,12 @@ class CheckoutRequest(BaseModel):
     plan: str  # pro | studio
     billing: str  # monthly | yearly
     origin_url: str
+    discount_code: Optional[str] = None
+
+
+class PayPalOrderRequest(BaseModel):
+    plan: str  # pro | studio
+    billing: str  # monthly | yearly
     discount_code: Optional[str] = None
 
 
@@ -779,6 +786,18 @@ async def payments_status(
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    # PayPal transactions: skip Stripe, return DB state directly (capture endpoint handles upgrade)
+    if tx.get("provider") == "paypal":
+        return {
+            "status": tx.get("status", "open"),
+            "payment_status": tx.get("payment_status", "pending"),
+            "amount_total": int(float(tx.get("amount", 0)) * 100),
+            "currency": tx.get("currency", "usd"),
+            "plan": tx.get("plan"),
+            "billing": tx.get("billing"),
+            "provider": "paypal",
+        }
+
     # Instantiate StripeCheckout so it sets stripe.api_base to the emergent proxy.
     # Then call stripe.checkout.Session.retrieve() directly — bypassing the
     # library's Pydantic validator which has a bug with StripeObject metadata.
@@ -879,6 +898,140 @@ async def stripe_webhook(request: Request):
                     }},
                 )
     return {"received": True}
+
+
+# ---------------- PAYPAL ----------------
+@api.get("/payments/paypal/config")
+async def paypal_config():
+    """Public endpoint — returns PayPal client_id + mode for the JS SDK."""
+    import paypal as pp
+    return {"client_id": pp.public_client_id(), "mode": pp._mode(), "currency": "USD"}
+
+
+@api.post("/payments/paypal/create-order")
+async def paypal_create_order(
+    body: PayPalOrderRequest,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    plan = PLANS.get(body.plan)
+    if not plan or body.billing not in plan:
+        raise HTTPException(status_code=400, detail="Invalid plan or billing")
+    amount = float(plan[body.billing]["amount"])
+
+    discount_info = None
+    if body.discount_code:
+        amount, dc = await apply_discount_code(body.discount_code, body.plan, amount)
+        if dc:
+            discount_info = {"code": dc["code"], "percent": dc["percent"]}
+
+    import paypal as pp
+    label = plan[body.billing]["label"]
+    try:
+        order = await pp.create_order(
+            amount=amount,
+            currency="USD",
+            reference_id=f"{body.plan}_{body.billing}",
+            description=f"Sonically {label}",
+            custom_id=user["user_id"],
+        )
+    except Exception as e:
+        logger.error(f"paypal create_order error: {e}")
+        raise HTTPException(status_code=502, detail="PayPal order creation failed")
+
+    order_id = order.get("id")
+    if not order_id:
+        raise HTTPException(status_code=502, detail="PayPal returned no order id")
+
+    await db.payment_transactions.insert_one({
+        "provider": "paypal",
+        "session_id": order_id,  # unified id for status polling
+        "user_id": user["user_id"],
+        "email": user["email"],
+        "amount": amount,
+        "currency": "usd",
+        "plan": body.plan,
+        "billing": body.billing,
+        "discount_code": (discount_info or {}).get("code"),
+        "discount_percent": (discount_info or {}).get("percent"),
+        "payment_status": "pending",
+        "status": "open",
+        "created_at": iso(utcnow()),
+    })
+    return {"order_id": order_id, "amount": amount, "discount": discount_info}
+
+
+@api.post("/payments/paypal/capture-order/{order_id}")
+async def paypal_capture_order(
+    order_id: str,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    tx = await db.payment_transactions.find_one({"session_id": order_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if tx.get("user_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not your order")
+
+    import paypal as pp
+    is_paid = tx.get("payment_status") == "paid"
+
+    # If not yet paid, call PayPal capture
+    if not is_paid:
+        try:
+            result = await pp.capture_order(order_id)
+        except httpx.HTTPStatusError as e:
+            # Handle "already captured" as success (idempotent retry)
+            if e.response.status_code == 422 and "ORDER_ALREADY_CAPTURED" in e.response.text:
+                try:
+                    result = await pp.get_order(order_id)
+                except Exception as ee:
+                    logger.error(f"paypal get_order after 422: {ee}")
+                    raise HTTPException(status_code=502, detail="PayPal capture failed")
+            else:
+                logger.error(f"paypal capture error: {e.response.status_code} {e.response.text}")
+                raise HTTPException(status_code=502, detail="PayPal capture failed")
+        except Exception as e:
+            logger.error(f"paypal capture error: {e}")
+            raise HTTPException(status_code=502, detail="PayPal capture failed")
+
+        pp_status = (result.get("status") or "").upper()
+        is_paid = pp_status == "COMPLETED"
+
+        await db.payment_transactions.update_one(
+            {"session_id": order_id},
+            {"$set": {
+                "status": "complete" if is_paid else "open",
+                "payment_status": "paid" if is_paid else "pending",
+                "paypal_capture": result if is_paid else None,
+                "updated_at": iso(utcnow()),
+            }},
+        )
+
+    # Idempotent tier upgrade — runs whether paid was just set or already was
+    if is_paid:
+        plan = tx.get("plan")
+        if plan in ("pro", "studio"):
+            user_doc = await db.users.find_one({"user_id": tx["user_id"]}, {"_id": 0})
+            if user_doc and user_doc.get("subscription_tier") != plan:
+                await db.users.update_one(
+                    {"user_id": tx["user_id"]},
+                    {"$set": {
+                        "subscription_tier": plan,
+                        "subscription_status": "active",
+                        "subscription_billing": tx.get("billing"),
+                        "subscription_activated_at": iso(utcnow()),
+                    }},
+                )
+
+    return {
+        "status": "complete" if is_paid else "open",
+        "payment_status": "paid" if is_paid else "pending",
+        "plan": tx.get("plan"),
+        "billing": tx.get("billing"),
+    }
 
 
 # ---------------- ADMIN ----------------

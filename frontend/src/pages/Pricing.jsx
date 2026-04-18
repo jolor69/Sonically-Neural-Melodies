@@ -4,6 +4,8 @@ import { Check, ArrowRight, Loader2, CircleAlert } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import PayPalCheckoutButton from "../components/PayPalCheckoutButton";
+import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 
 export default function Pricing() {
   const { user, refresh } = useAuth();
@@ -12,8 +14,15 @@ export default function Pricing() {
   const [code, setCode] = useState("");
   const [validating, setValidating] = useState(false);
   const [discount, setDiscount] = useState(null); // { code, percent, amount, plan? }
+  const [paypalConfig, setPaypalConfig] = useState(null);
 
   useEffect(() => { refresh?.(); }, []);
+
+  useEffect(() => {
+    api.get("/payments/paypal/config")
+      .then((r) => setPaypalConfig(r.data))
+      .catch(() => setPaypalConfig(null));
+  }, []);
 
   const validateCode = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -68,7 +77,7 @@ export default function Pricing() {
     ? Number((base * (100 - discount.percent) / 100).toFixed(2))
     : base;
 
-  return (
+  const pricingInner = (
     <div className="min-h-screen bg-[#0A0A0C] text-white">
       <Navbar />
       <main className="max-w-7xl mx-auto px-6 md:px-10 py-16">
@@ -179,6 +188,15 @@ export default function Pricing() {
             disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}
             loading={busyPlan === "pro"}
             testId="plan-pro"
+            paypalNode={paypalConfig?.client_id ? (
+              <PayPalCheckoutButton
+                plan="pro"
+                billing={billing}
+                discountCode={discount?.code}
+                disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}
+                testId="plan-pro"
+              />
+            ) : null}
           />
           <PriceCard
             name="Studio"
@@ -198,6 +216,15 @@ export default function Pricing() {
             disabled={user?.subscription_tier === "studio" || busyPlan === "studio"}
             loading={busyPlan === "studio"}
             testId="plan-studio"
+            paypalNode={paypalConfig?.client_id ? (
+              <PayPalCheckoutButton
+                plan="studio"
+                billing={billing}
+                discountCode={discount?.code}
+                disabled={user?.subscription_tier === "studio" || busyPlan === "studio"}
+                testId="plan-studio"
+              />
+            ) : null}
           />
         </div>
 
@@ -208,15 +235,32 @@ export default function Pricing() {
         <div className="mt-12 text-center bg-[#121216] border border-[#2A2A35] rounded-xl p-6 max-w-3xl mx-auto flex items-center gap-3 justify-center text-sm text-[#9CA3AF]">
           <CircleAlert size={16} className="text-[#E28C22]" />
           <span>
-            <span className="font-semibold text-white">Stripe</span> checkout is live. PayPal support is coming soon.
+            Pay with <span className="font-semibold text-white">Stripe</span> (card) or <span className="font-semibold text-white">PayPal</span>. Cancel anytime.
           </span>
         </div>
       </main>
     </div>
   );
+
+  if (!paypalConfig?.client_id) {
+    return pricingInner;
+  }
+
+  return (
+    <PayPalScriptProvider
+      options={{
+        clientId: paypalConfig.client_id,
+        currency: paypalConfig.currency || "USD",
+        intent: "capture",
+        components: "buttons",
+      }}
+    >
+      {pricingInner}
+    </PayPalScriptProvider>
+  );
 }
 
-function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, onCta, disabled, loading, highlight, badge, testId, strike }) {
+function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, onCta, disabled, loading, highlight, badge, testId, strike, paypalNode }) {
   return (
     <div
       data-testid={testId}
@@ -260,6 +304,12 @@ function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, o
         {loading ? <Loader2 size={16} className="animate-spin" /> : null}
         {ctaLabel} {highlight && !disabled && !loading && <ArrowRight size={14} />}
       </button>
+      {paypalNode && (
+        <div className="mt-3" data-testid={`${testId}-paypal-slot`}>
+          <div className="label-overline text-[10px] text-[#6B7280] text-center mb-2">or pay with</div>
+          {paypalNode}
+        </div>
+      )}
     </div>
   );
 }
