@@ -148,11 +148,16 @@ export default function Landing() {
   const [presets, setPresets] = useState([]);
   const [plans, setPlans] = useState(null);
   const [billing, setBilling] = useState("yearly");
+  const [sampleCredits, setSampleCredits] = useState(null);
 
   useEffect(() => {
     api.get("/presets").then((r) => setPresets(r.data.presets)).catch(() => {});
     api.get("/plans").then((r) => setPlans(r.data.plans)).catch(() => {});
+    api.get("/presets/samples/credits").then((r) => setSampleCredits(r.data)).catch(() => {});
   }, []);
+
+  const titleFor = (pid) =>
+    sampleCredits?.tracks?.find((t) => t.preset === pid)?.title;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-white">
@@ -256,10 +261,23 @@ export default function Landing() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {presets.map((p, i) => (
             <div key={p.id} className="fade-up" style={{ animationDelay: `${i * 60}ms` }}>
-              <PresetCard preset={p} onClick={() => {}} enableMiniPlayer />
+              <PresetCard preset={p} onClick={() => {}} enableMiniPlayer sampleTitle={titleFor(p.id)} />
             </div>
           ))}
         </div>
+
+        {sampleCredits && (
+          <div className="mt-10 text-center text-xs text-[#6B7280]" data-testid="sample-attribution">
+            Demo clips by{" "}
+            <a href={sampleCredits.source} target="_blank" rel="noopener noreferrer" className="text-[#E28C22] hover:underline">
+              {sampleCredits.artist}
+            </a>{" "}
+            · Licensed under{" "}
+            <a href={sampleCredits.license_url} target="_blank" rel="noopener noreferrer" className="text-[#E28C22] hover:underline">
+              {sampleCredits.license}
+            </a>
+          </div>
+        )}
       </section>
 
       {/* PRESET DETAIL — what each preset does */}

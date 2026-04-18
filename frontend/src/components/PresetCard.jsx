@@ -3,7 +3,7 @@ import { ICON_MAP } from "../lib/icons";
 import { Play, Pause } from "lucide-react";
 import { API } from "../lib/api";
 
-export default function PresetCard({ preset, selected, onClick, compact = false, testId, enableMiniPlayer = false }) {
+export default function PresetCard({ preset, selected, onClick, compact = false, testId, enableMiniPlayer = false, sampleTitle = null }) {
   const Icon = ICON_MAP[preset.icon] || ICON_MAP.Globe;
   const [which, setWhich] = useState("mastered");
   const [playing, setPlaying] = useState(false);
@@ -68,7 +68,13 @@ export default function PresetCard({ preset, selected, onClick, compact = false,
       </div>
 
       {enableMiniPlayer && (
-        <div className="mt-4 flex items-center gap-2" data-testid={`preset-miniplayer-${preset.id}`}>
+        <>
+          {sampleTitle && (
+            <div className="mt-3 label-overline text-[9px] text-[#6B7280] truncate" data-testid={`preset-sample-title-${preset.id}`}>
+              ♫ {sampleTitle}
+            </div>
+          )}
+          <div className="mt-2 flex items-center gap-2" data-testid={`preset-miniplayer-${preset.id}`}>
           <button
             onClick={togglePlay}
             data-testid={`preset-miniplayer-play-${preset.id}`}
@@ -105,6 +111,7 @@ export default function PresetCard({ preset, selected, onClick, compact = false,
             preload="none"
           />
         </div>
+        </>
       )}
 
       {selected && !enableMiniPlayer ? (

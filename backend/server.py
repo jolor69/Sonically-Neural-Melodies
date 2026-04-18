@@ -999,60 +999,117 @@ async def validate_discount(
 # ---------------- PRESET SAMPLES ----------------
 PRESET_SAMPLES: dict = {}
 
+# Real music demo clips per preset — Kevin MacLeod, licensed CC-BY 4.0
+# Source: https://incompetech.com/ · https://creativecommons.org/licenses/by/4.0/
+PRESET_SAMPLE_SOURCES = {
+    "universal": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/RetroFuture%20Clean.mp3",
+        "title": "RetroFuture Clean",
+        "offset": 25,  # skip intro
+    },
+    "fire": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Snitch.mp3",
+        "title": "Sneaky Snitch",
+        "offset": 20,
+    },
+    "clarity": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fluidscape.mp3",
+        "title": "Fluidscape",
+        "offset": 30,
+    },
+    "tape": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Covert%20Affair.mp3",
+        "title": "Covert Affair",
+        "offset": 20,
+    },
+    "natural": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fretless.mp3",
+        "title": "Fretless",
+        "offset": 20,
+    },
+    "spatial": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ossuary%201%20-%20A%20Beginning.mp3",
+        "title": "Ossuary 1 - A Beginning",
+        "offset": 15,
+    },
+    "cinematic": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hero%20Theme.mp3",
+        "title": "Hero Theme",
+        "offset": 10,
+    },
+    "punch": {
+        "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dirt%20Rhodes.mp3",
+        "title": "Dirt Rhodes",
+        "offset": 20,
+    },
+}
 
-def _generate_demo_audio() -> bytes:
-    """Generate a 12s musical demo using ffmpeg lavfi (chord + beat)."""
-    import tempfile, subprocess
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        out = f.name
+SAMPLE_DURATION_SEC = 15
+
+
+def _download_and_trim_sample(url: str, offset: int) -> Optional[bytes]:
+    """Download the source MP3 and trim to 15s starting at offset. Returns WAV bytes."""
+    import tempfile, subprocess, urllib.request
     try:
-        # Layered chord: root + maj third + fifth + octave, plus low noise bed.
-        # Kick via tremolo on a sub-sine to avoid escaping issues with mod().
-        fc = (
-            "[0]volume=0.18[a];"
-            "[1]volume=0.14[b];"
-            "[2]volume=0.12[c];"
-            "[3]volume=0.10[d];"
-            "[4]tremolo=f=2:d=0.9,volume=0.25[e];"
-            "[5]volume=0.05[n];"
-            "[a][b][c][d][e][n]amix=inputs=6:normalize=0,"
-            "aformat=sample_fmts=s16:sample_rates=44100:channel_layouts=stereo"
-        )
+        # Download full source (small enough; single-shot)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Sonically/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            src_bytes = resp.read()
+    except Exception as e:
+        logger.error(f"Download failed ({url}): {e}")
+        return None
+
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(src_bytes)
+        in_path = f.name
+    out_path = in_path + ".wav"
+    try:
+        # Trim to SAMPLE_DURATION_SEC starting at offset, resample to 44.1/stereo WAV
         subprocess.run([
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=f=220:d=12",
-            "-f", "lavfi", "-i", "sine=f=277.18:d=12",
-            "-f", "lavfi", "-i", "sine=f=329.63:d=12",
-            "-f", "lavfi", "-i", "sine=f=440:d=12",
-            "-f", "lavfi", "-i", "sine=f=60:d=12",  # sub bass kick-ish (shaped by tremolo)
-            "-f", "lavfi", "-i", "anoisesrc=color=brown:d=12",
-            "-filter_complex", fc,
-            out,
+            "-ss", str(offset), "-i", in_path,
+            "-t", str(SAMPLE_DURATION_SEC),
+            "-ar", "44100", "-ac", "2",
+            "-acodec", "pcm_s16le",
+            out_path,
         ], check=True, timeout=60)
-        with open(out, "rb") as rf:
+        with open(out_path, "rb") as rf:
             return rf.read()
+    except Exception as e:
+        logger.error(f"Trim failed: {e}")
+        return None
     finally:
-        try:
-            os.unlink(out)
-        except OSError:
-            pass
+        for p in (in_path, out_path):
+            try: os.unlink(p)
+            except OSError: pass
 
 
 async def ensure_preset_samples():
-    if PRESET_SAMPLES:
-        return
-    try:
-        original = _generate_demo_audio()
-    except Exception as e:
-        logger.error(f"Demo audio generation failed: {e}")
+    if len(PRESET_SAMPLES) >= len(PRESETS):
         return
     for preset in PRESETS:
+        pid = preset["id"]
+        if pid in PRESET_SAMPLES:
+            continue
+        src = PRESET_SAMPLE_SOURCES.get(pid)
+        if not src:
+            continue
+        original = _download_and_trim_sample(src["url"], src["offset"])
+        if not original:
+            logger.warning(f"Could not prepare sample for {pid}")
+            continue
         try:
             mastered = apply_preset(original, "wav", preset["filter"], "wav")
-            PRESET_SAMPLES[preset["id"]] = {"original": original, "mastered": mastered}
         except Exception as e:
-            logger.error(f"Preset sample gen failed for {preset['id']}: {e}")
-    logger.info(f"Generated {len(PRESET_SAMPLES)} preset samples")
+            logger.error(f"Mastering sample for {pid} failed: {e}")
+            continue
+        PRESET_SAMPLES[pid] = {
+            "original": original,
+            "mastered": mastered,
+            "title": src["title"],
+        }
+        logger.info(f"Prepared sample for preset {pid}: {src['title']} ({len(original)} → {len(mastered)} bytes)")
+    logger.info(f"Preset samples ready: {len(PRESET_SAMPLES)}/{len(PRESETS)}")
 
 
 @api.get("/presets/{preset_id}/sample/{which}")
@@ -1061,12 +1118,15 @@ async def preset_sample(preset_id: str, which: str):
         raise HTTPException(status_code=400, detail="which must be original|mastered")
     if preset_id not in PRESET_MAP:
         raise HTTPException(status_code=404, detail="Unknown preset")
-    if not PRESET_SAMPLES:
-        await ensure_preset_samples()
     sample = PRESET_SAMPLES.get(preset_id)
+    if not sample:
+        # try on-demand
+        await ensure_preset_samples()
+        sample = PRESET_SAMPLES.get(preset_id)
     if not sample:
         raise HTTPException(status_code=503, detail="Sample not ready, please retry")
     data = sample[which]
+    safe_title = sample.get("title", "").encode("ascii", "ignore").decode("ascii")
     return Response(
         content=data,
         media_type="audio/wav",
@@ -1074,8 +1134,24 @@ async def preset_sample(preset_id: str, which: str):
             "Content-Length": str(len(data)),
             "Accept-Ranges": "bytes",
             "Cache-Control": "public, max-age=86400",
+            "X-Sample-Title": safe_title,
         },
     )
+
+
+@api.get("/presets/samples/credits")
+async def preset_sample_credits():
+    """Attribution for demo clips (CC-BY 4.0)."""
+    return {
+        "artist": "Kevin MacLeod",
+        "source": "https://incompetech.com/",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "tracks": [
+            {"preset": pid, "title": src["title"], "url": src["url"]}
+            for pid, src in PRESET_SAMPLE_SOURCES.items()
+        ],
+    }
 
 
 # ---------------- STARTUP ----------------
