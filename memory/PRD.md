@@ -65,6 +65,16 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 9 — httpOnly cookie migration + Donasi link (2026-02-18)
+- **httpOnly auth cookie**:
+  - Added lightweight middleware in `server.py` that translates the `auth_token` httpOnly cookie into an Authorization Bearer header if the request doesn't already have one. Zero changes to the ~40 protected endpoints.
+  - `/auth/login` and `/auth/signup` now set the `auth_token` cookie (`HttpOnly; Secure; SameSite=none; Max-Age=7d`) in addition to returning the JWT in the JSON body.
+  - `/auth/logout` clears both `auth_token` and `session_token` cookies.
+  - Frontend `AuthContext`: still stores the JWT in localStorage as a fallback (for same-origin dev + browsers that block 3rd-party cookies). The primary auth vector on the deployed cross-origin site is now the httpOnly cookie, which JS cannot read → XSS-safe.
+  - Verified via curl: login + cookie-only `/auth/me` works, logout clears it, invalidated with 401 after.
+- **Navbar DONASI link**: New gradient-styled link placed right after ENGINEERS on landing and after Pricing on app variants. Points to `https://saweria.co/sonically` (new tab, `rel="noopener noreferrer"`, testid `nav-donasi`).
+- **User action**: Redeploy required for both fixes to reach sonically.pro.
+
 ## Iteration 8 — Login bounce-back on deployed site (2026-02-18)
 - **Bug**: Users logging into sonically.pro successfully got redirected back to /login immediately. Happened for both admin and non-admin users.
 - **Root cause**: `auth.resolve_user()` checked for the `session_token` cookie BEFORE the Authorization Bearer JWT. Once a user had ever done Google OAuth (even in a previous session), their browser held a stale `session_token` cookie for the API domain. With axios `withCredentials: true`, that stale cookie was sent on every request. `resolve_user` saw cookie first → treated request as session auth → `user_sessions` lookup failed → 401 → AuthContext set user=null → ProtectedRoute bounced to /login.

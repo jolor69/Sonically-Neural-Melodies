@@ -34,14 +34,17 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.post("/auth/login", { email, password });
-    localStorage.setItem("auth_token", res.data.token);
+    // Backend sets httpOnly auth_token cookie (primary auth on deployed site).
+    // We also mirror the JWT in localStorage as a fallback for same-origin dev setups
+    // where third-party cookies may be blocked.
+    if (res.data.token) localStorage.setItem("auth_token", res.data.token);
     setUser(res.data.user);
     return res.data.user;
   };
 
   const signup = async (email, password, name) => {
     const res = await api.post("/auth/signup", { email, password, name });
-    localStorage.setItem("auth_token", res.data.token);
+    if (res.data.token) localStorage.setItem("auth_token", res.data.token);
     setUser(res.data.user);
     return res.data.user;
   };

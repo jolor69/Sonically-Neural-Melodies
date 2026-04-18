@@ -30,11 +30,29 @@ export default function Navbar({ variant = "app" }) {
               <a href="#presets" data-testid="nav-presets">Presets</a>
               <a href="#pricing" data-testid="nav-pricing">Pricing</a>
               <a href="#engineers" data-testid="nav-engineers">Engineers</a>
+              <a
+                href="https://saweria.co/sonically"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="nav-donasi"
+                className="text-brand-gradient font-black"
+              >
+                Donasi
+              </a>
             </>
           ) : (
             <>
               <Link to="/dashboard" data-testid="nav-dashboard">Dashboard</Link>
               <Link to="/pricing" data-testid="nav-app-pricing">Pricing</Link>
+              <a
+                href="https://saweria.co/sonically"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="nav-donasi"
+                className="text-brand-gradient font-black"
+              >
+                Donasi
+              </a>
               {user?.is_admin && (
                 <Link to="/admin" data-testid="nav-admin" className="text-[#A855F7]">Admin</Link>
               )}

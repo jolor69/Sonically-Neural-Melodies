@@ -38,6 +38,27 @@ db = client[os.environ["DB_NAME"]]
 app = FastAPI(title="Sonically API")
 api = APIRouter(prefix="/api")
 
+
+# ---------------- AUTH MIDDLEWARE ----------------
+# When the client sends an `auth_token` httpOnly cookie (set by /auth/login and /auth/signup),
+# inject it as the Authorization Bearer header if one isn't already present. This lets
+# every existing endpoint read auth the same way (Authorization header) without being
+# aware of the cookie. It also means the JWT never needs to live in localStorage — the
+# browser attaches the cookie automatically on every same-site/withCredentials request.
+@app.middleware("http")
+async def auth_cookie_to_bearer(request, call_next):
+    has_auth_header = any(
+        k.decode("latin-1").lower() == "authorization" for k, _ in request.scope.get("headers", [])
+    )
+    if not has_auth_header:
+        cookie_token = request.cookies.get("auth_token")
+        if cookie_token:
+            # Scope headers are a list of (bytes, bytes) tuples
+            new_headers = list(request.scope.get("headers", []))
+            new_headers.append((b"authorization", f"Bearer {cookie_token}".encode("latin-1")))
+            request.scope["headers"] = new_headers
+    return await call_next(request)
+
 # ---------------- MODELS ----------------
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -287,6 +308,20 @@ async def list_plans():
 
 
 # ---------------- AUTH ----------------
+def _set_auth_cookie(response, token: str):
+    """Sets the httpOnly JWT cookie — same-site 'none' so it works on the deployed
+    cross-origin preview (frontend sonically.pro ↔ API emergentagent subdomain)."""
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        max_age=7 * 24 * 60 * 60,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+
+
 @api.post("/auth/signup")
 async def signup(body: SignupRequest, response: Response):
     email = body.email.lower()
@@ -307,6 +342,7 @@ async def signup(body: SignupRequest, response: Response):
     }
     await db.users.insert_one(user_doc)
     token = create_jwt(user_id)
+    _set_auth_cookie(response, token)
     return {
         "token": token,
         "user": {
@@ -323,7 +359,7 @@ async def signup(body: SignupRequest, response: Response):
 
 
 @api.post("/auth/login")
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, response: Response):
     email = body.email.lower()
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or not user.get("password_hash"):
@@ -331,6 +367,7 @@ async def login(body: LoginRequest):
     if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_jwt(user["user_id"])
+    _set_auth_cookie(response, token)
     return {
         "token": token,
         "user": {
@@ -438,6 +475,7 @@ async def logout(
     if session_token:
         await db.user_sessions.delete_many({"session_token": session_token})
     response.delete_cookie("session_token", path="/")
+    response.delete_cookie("auth_token", path="/")
     return {"ok": True}
 
 
