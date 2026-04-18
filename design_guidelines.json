@@ -1,0 +1,134 @@
+{
+  "theme": "dark",
+  "archetype": "5 (Jewel & Luxury) with Retro-Futurism/Analog Studio elements",
+  "domain": "SaaS Audio Mastering Tool",
+  "typography": {
+    "font_families": {
+      "headings": "Outfit",
+      "body": "IBM Plex Sans",
+      "data_and_code": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-5xl md:text-6xl+ tracking-tighter font-black",
+      "h2": "text-3xl md:text-4xl tracking-tight font-bold",
+      "h3": "text-xl md:text-2xl font-semibold",
+      "body": "text-base leading-relaxed",
+      "labels_overlines": "text-xs tracking-[0.2em] uppercase font-bold font-mono"
+    },
+    "rules": [
+      "Never use Inter, Space Grotesk, or Roboto for headings.",
+      "Use JetBrains Mono for audio metrics, timestamps, and preset tags to give a technical studio feel.",
+      "Tight letter spacing on all headings > 32px."
+    ]
+  },
+  "colors": {
+    "background": {
+      "base": "#0A0A0C",
+      "surface": "#121216",
+      "surface_elevated": "#1A1A20",
+      "glass": "bg-black/60 backdrop-blur-xl"
+    },
+    "accents": {
+      "primary": "#E28C22",
+      "primary_hover": "#F5A138",
+      "secondary": "#00E676",
+      "border": "#2A2A35"
+    },
+    "presets": [
+      { "id": "universal", "name": "Universal", "color": "#3B82F6", "icon": "Globe" },
+      { "id": "fire", "name": "Fire", "color": "#EF4444", "icon": "Flame" },
+      { "id": "clarity", "name": "Clarity", "color": "#06B6D4", "icon": "Sparkles" },
+      { "id": "tape", "name": "Tape", "color": "#F59E0B", "icon": "CassetteTape" },
+      { "id": "natural", "name": "Natural", "color": "#10B981", "icon": "Leaf" },
+      { "id": "spatial", "name": "Spatial", "color": "#8B5CF6", "icon": "Orbit" },
+      { "id": "cinematic", "name": "Cinematic", "color": "#EAB308", "icon": "Film" },
+      { "id": "punch", "name": "Punch", "color": "#EC4899", "icon": "Target" }
+    ],
+    "rules": [
+      "Strict dark mode. Do not use pure white for text; use #F4F4F5.",
+      "The Tape Amber (#E28C22) is used for CTAs to give an analog VU-meter warmth.",
+      "Each preset gets a unique color and icon on hover states."
+    ]
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-8 md:p-12",
+    "section_gap": "gap-24 md:gap-32",
+    "grids": {
+      "marketing_hero": "grid-cols-1 md:grid-cols-12 gap-8",
+      "dashboard_bento": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "preset_grid": "grid-cols-2 md:grid-cols-4 gap-4"
+    },
+    "border_radius": {
+      "cards": "rounded-xl",
+      "buttons": "rounded-md",
+      "inputs": "rounded-md"
+    }
+  },
+  "components": {
+    "cards": {
+      "style": "bg-[#121216] border border-[#2A2A35] shadow-lg rounded-xl",
+      "hover": "hover:border-[#E28C22]/50 hover:-translate-y-1 transition-all duration-300",
+      "preset_card": "relative overflow-hidden group cursor-pointer p-6 bento-item flex flex-col justify-between min-h-[160px]"
+    },
+    "buttons": {
+      "primary": "bg-[#E28C22] text-[#0A0A0C] font-bold hover:bg-[#F5A138] px-6 py-3 rounded-md transition-colors",
+      "secondary": "bg-transparent border border-[#2A2A35] text-white hover:bg-[#1A1A20] px-6 py-3 rounded-md",
+      "ghost": "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+    },
+    "workspace_dropzone": {
+      "style": "border-2 border-dashed border-[#2A2A35] bg-[#121216] hover:border-[#E28C22] transition-colors rounded-xl flex flex-col items-center justify-center p-12 text-center"
+    }
+  },
+  "motion": {
+    "transitions": "transition-all duration-300 ease-in-out",
+    "hover_effects": "Preset cards should have a subtle inner glow matching their unique accent color when hovered.",
+    "waveform_animation": "Use dynamic CSS or Framer Motion to animate audio visualization bars.",
+    "staggered_entrance": "Lists and grid items should fade in with a staggered delay on mount."
+  },
+  "images": [
+    {
+      "category": "hero_background",
+      "url": "https://images.unsplash.com/photo-1627667049672-ffa8a285567c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwzfHxyZWNvcmRpbmclMjBzdHVkaW8lMjBjb25zb2xlfGVufDB8fHx8MTc3NjQ4MjMyNHww&ixlib=rb-4.1.0&q=85",
+      "description": "High-end recording studio mixer console, used as hero overlay with bg-black/60.",
+      "placement": "Landing page hero section background"
+    },
+    {
+      "category": "testimonial_avatar",
+      "url": "https://images.pexels.com/photos/11776927/pexels-photo-11776927.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Music producer in high-tech studio.",
+      "placement": "Landing page testimonials section"
+    },
+    {
+      "category": "abstract_waveform",
+      "url": "https://images.unsplash.com/photo-1744907529553-dc603ead4d4e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzJ8MHwxfHNlYXJjaHwxfHxzb3VuZCUyMHdhdmUlMjBhYnN0cmFjdHxlbnwwfHx8fDE3NzY0ODIzMjR8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract colorful waveform representing processed audio.",
+      "placement": "Mastering dashboard background or empty state visual"
+    }
+  ],
+  "pages": {
+    "landing": {
+      "hero": "Dark overlay over studio mixer image. Huge Outfit H1 'Master Your Sound'. Tape Amber primary CTA. Include a mock waveform visualization.",
+      "features_presets": "Grid showing the 8 presets, each styled like a collectible card with its unique icon and hover color.",
+      "testimonials": "Use bento grid layout for producer quotes.",
+      "pricing": "Three tiers: Free ($0), Pro ($4.99/mo | $44.99/yr), Studio ($12.99/mo | $119.99/yr). Monthly/yearly toggle."
+    },
+    "auth": {
+      "layout": "Split screen. Left: dark branded graphic/waveform. Right: Auth form.",
+      "features": "Email/password toggle, Google sign-in button."
+    },
+    "dashboard": {
+      "layout": "Sidebar navigation (JetBrains mono links). Main area: Audio upload dropzone, recent tracks list.",
+      "workspace": "A/B waveform preview (original vs mastered). Preset picker (8 unique cards). Process & Download buttons."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install required fonts: Outfit and JetBrains Mono via Google Fonts in index.html.",
+    "Implement the 8 mastering presets in the workspace, ensuring each has its EXACT unique Lucide React icon and accent color mapped from the JSON.",
+    "Create the A/B waveform preview using custom HTML/CSS visualization (or a library like wavesurfer.js if feasible) showing before/after states.",
+    "Do NOT use pure white backgrounds anywhere; use #0A0A0C for body and #121216 for cards.",
+    "All interactive elements MUST have a data-testid attribute.",
+    "Use Shadcn UI for forms, tabs, dropdowns, but override their border and background classes to match the dark slate/amber theme.",
+    "Make sure preset cards feel tactile and distinct, not generic.",
+    "Implement the Free/Pro/Studio pricing cards with Stripe checkout intent (mocked if real API not available, but UI should support it)."
+  ]
+}
