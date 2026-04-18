@@ -35,6 +35,9 @@ export default function Navbar({ variant = "app" }) {
             <>
               <Link to="/dashboard" data-testid="nav-dashboard">Dashboard</Link>
               <Link to="/pricing" data-testid="nav-app-pricing">Pricing</Link>
+              {user?.is_admin && (
+                <Link to="/admin" data-testid="nav-admin" className="text-[#A855F7]">Admin</Link>
+              )}
             </>
           )}
         </nav>

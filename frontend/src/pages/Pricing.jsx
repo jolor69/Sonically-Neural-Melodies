@@ -9,20 +9,64 @@ export default function Pricing() {
   const { user, refresh } = useAuth();
   const [billing, setBilling] = useState("yearly");
   const [busyPlan, setBusyPlan] = useState(null);
+  const [code, setCode] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [discount, setDiscount] = useState(null); // { code, percent, amount, plan? }
 
   useEffect(() => { refresh?.(); }, []);
+
+  const validateCode = async () => {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) { setDiscount(null); return; }
+    setValidating(true);
+    try {
+      // Validate against pro first; backend returns valid=false if code doesn't match
+      const r = await api.post("/payments/validate-discount", {
+        code: trimmed,
+        plan: "pro",
+        billing,
+      });
+      if (r.data.valid) {
+        setDiscount({ code: r.data.code, percent: r.data.percent });
+        toast.success(`${r.data.percent}% off applied`);
+        return;
+      }
+      const r2 = await api.post("/payments/validate-discount", {
+        code: trimmed,
+        plan: "studio",
+        billing,
+      });
+      if (r2.data.valid) {
+        setDiscount({ code: r2.data.code, percent: r2.data.percent, plan: "studio" });
+        toast.success(`${r2.data.percent}% off applied (Studio)`);
+        return;
+      }
+      setDiscount(null);
+      toast.error("Invalid or inactive code");
+    } catch (e) {
+      toast.error("Couldn't validate code");
+    } finally {
+      setValidating(false);
+    }
+  };
 
   const checkout = async (plan) => {
     setBusyPlan(plan);
     try {
       const origin_url = window.location.origin;
-      const r = await api.post("/payments/checkout", { plan, billing, origin_url });
+      const payload = { plan, billing, origin_url };
+      if (discount?.code) payload.discount_code = discount.code;
+      const r = await api.post("/payments/checkout", payload);
       window.location.href = r.data.url;
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Checkout failed");
       setBusyPlan(null);
     }
   };
+
+  const applyDiscountPrice = (base) => discount?.percent
+    ? Number((base * (100 - discount.percent) / 100).toFixed(2))
+    : base;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-white">
@@ -40,7 +84,7 @@ export default function Pricing() {
           </p>
         </div>
 
-        <div className="flex justify-center mb-12">
+        <div className="flex justify-center mb-6">
           <div className="inline-flex items-center gap-1 bg-[#121216] border border-[#2A2A35] rounded-full p-1" data-testid="pricing-billing-toggle">
             {["monthly", "yearly"].map((b) => (
               <button
@@ -57,6 +101,46 @@ export default function Pricing() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Discount code input */}
+        <div className="flex justify-center mb-12" data-testid="pricing-discount-section">
+          {discount ? (
+            <div className="inline-flex items-center gap-3 bg-[#0B241A] border border-[#10B981] rounded-full px-4 py-2 text-sm" data-testid="pricing-discount-active">
+              <span className="label-overline text-[10px] text-[#10B981]">Applied</span>
+              <span className="mono font-bold text-[#10B981]">{discount.code}</span>
+              <span className="text-[#9CA3AF]">· {discount.percent}% off</span>
+              <button
+                onClick={() => { setDiscount(null); setCode(""); }}
+                className="text-[#6B7280] hover:text-white text-xs"
+                data-testid="pricing-discount-remove"
+              >
+                remove
+              </button>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 bg-[#121216] border border-[#2A2A35] rounded-full p-1 pl-4">
+              <span className="label-overline text-[10px]">Promo code</span>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && validateCode()}
+                placeholder="LAUNCH20"
+                maxLength={30}
+                data-testid="pricing-discount-input"
+                className="bg-transparent text-sm uppercase tracking-wider w-32 outline-none placeholder:text-[#6B7280]"
+              />
+              <button
+                onClick={validateCode}
+                disabled={validating || !code.trim()}
+                data-testid="pricing-discount-apply"
+                className="bg-[#E28C22] text-[#0A0A0C] font-semibold text-sm px-4 py-1.5 rounded-full hover:bg-[#F5A138] disabled:opacity-50"
+              >
+                {validating ? "…" : "Apply"}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
@@ -78,9 +162,10 @@ export default function Pricing() {
           <PriceCard
             name="Pro"
             tagline="Serious creators who release"
-            price={billing === "yearly" ? "$3.75" : "$4.99"}
+            price={`$${applyDiscountPrice(billing === "yearly" ? 3.75 : 4.99)}`}
             period="/ month"
-            billed={billing === "yearly" ? "Billed $44.99/yr" : "Billed monthly"}
+            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(44.99)}/yr` : "Billed monthly"}
+            strike={discount ? (billing === "yearly" ? "$3.75" : "$4.99") : null}
             highlight
             badge="Popular"
             features={[
@@ -98,9 +183,10 @@ export default function Pricing() {
           <PriceCard
             name="Studio"
             tagline="Labels, producers, multi-project"
-            price={billing === "yearly" ? "$9.99" : "$12.99"}
+            price={`$${applyDiscountPrice(billing === "yearly" ? 9.99 : 12.99)}`}
             period="/ month"
-            billed={billing === "yearly" ? "Billed $119.99/yr" : "Billed monthly"}
+            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(119.99)}/yr` : "Billed monthly"}
+            strike={discount ? (billing === "yearly" ? "$9.99" : "$12.99") : null}
             features={[
               "Unlimited exports",
               "Hi-res 24/96 & 24/192",
@@ -130,7 +216,7 @@ export default function Pricing() {
   );
 }
 
-function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, onCta, disabled, loading, highlight, badge, testId }) {
+function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, onCta, disabled, loading, highlight, badge, testId, strike }) {
   return (
     <div
       data-testid={testId}
@@ -145,9 +231,12 @@ function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, o
       )}
       <div className="text-3xl font-bold" style={{ fontFamily: "Outfit" }}>{name}</div>
       <div className="text-[#9CA3AF] text-sm mt-1">{tagline}</div>
-      <div className="mt-6 flex items-end gap-1">
+      <div className="mt-6 flex items-end gap-2">
         <span className="text-5xl font-black" style={{ fontFamily: "Outfit" }}>{price}</span>
         {period && <span className="text-[#9CA3AF] mb-2">{period}</span>}
+        {strike && (
+          <span className="text-xl line-through text-[#6B7280] mb-1" data-testid={`${testId}-strike`}>{strike}</span>
+        )}
       </div>
       {billed && <div className="label-overline mt-1 text-[10px]">{billed}</div>}
       <ul className="mt-8 space-y-3 text-sm flex-1">

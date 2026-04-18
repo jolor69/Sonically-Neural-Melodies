@@ -63,6 +63,7 @@ class CheckoutRequest(BaseModel):
     plan: str  # pro | studio
     billing: str  # monthly | yearly
     origin_url: str
+    discount_code: Optional[str] = None
 
 
 class ProcessRequest(BaseModel):
@@ -98,18 +99,51 @@ TIER_LIMITS = {
     "pro": {
         "max_tracks_per_month": 30,
         "max_file_mb": 100,
-        "max_duration_sec": None,
+        "max_duration_sec": 300,  # 5 minutes (admin-overrideable)
         "advanced_controls": True,
-        "allowed_presets": None,  # all
+        "allowed_presets": None,
     },
     "studio": {
         "max_tracks_per_month": 10000,
         "max_file_mb": 200,
-        "max_duration_sec": None,
+        "max_duration_sec": 300,  # 5 minutes (admin-overrideable)
         "advanced_controls": True,
         "allowed_presets": None,
     },
 }
+
+ADMIN_EMAILS = {"jolor69@gmail.com"}
+
+
+def is_admin(user: dict) -> bool:
+    return (user or {}).get("email", "").lower() in ADMIN_EMAILS
+
+
+async def get_effective_limits(tier: str) -> dict:
+    base = dict(TIER_LIMITS[tier])
+    s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
+    applied = s.get("applied", {})
+    if tier == "pro" and "pro_max_duration_sec" in applied:
+        base["max_duration_sec"] = applied["pro_max_duration_sec"]
+    if tier == "studio" and "studio_max_duration_sec" in applied:
+        base["max_duration_sec"] = applied["studio_max_duration_sec"]
+    return base
+
+
+async def apply_discount_code(code: Optional[str], plan: str, amount: float) -> (float, Optional[dict]):
+    if not code:
+        return amount, None
+    dc = await db.discount_codes.find_one(
+        {"code": code.upper().strip(), "active": True},
+        {"_id": 0},
+    )
+    if not dc:
+        return amount, None
+    if dc.get("plan") not in ("all", plan):
+        return amount, None
+    pct = float(dc.get("percent", 0))
+    new_amount = round(amount * (100 - pct) / 100, 2)
+    return new_amount, dc
 
 ALLOWED_EXT = {"wav", "mp3", "flac", "m4a", "aac", "ogg"}
 
@@ -233,6 +267,7 @@ async def signup(body: SignupRequest, response: Response):
             "auth_provider": "email",
             "subscription_tier": "free",
             "subscription_status": "none",
+            "is_admin": is_admin(user_doc),
         },
     }
 
@@ -256,6 +291,7 @@ async def login(body: LoginRequest):
             "auth_provider": user.get("auth_provider", "email"),
             "subscription_tier": user.get("subscription_tier", "free"),
             "subscription_status": user.get("subscription_status", "none"),
+            "is_admin": is_admin(user),
         },
     }
 
@@ -321,6 +357,7 @@ async def oauth_session_exchange(request: Request, response: Response):
             "auth_provider": user.get("auth_provider"),
             "subscription_tier": user.get("subscription_tier", "free"),
             "subscription_status": user.get("subscription_status", "none"),
+            "is_admin": is_admin(user),
         }
     }
 
@@ -339,6 +376,7 @@ async def auth_me(
         "auth_provider": user.get("auth_provider", "email"),
         "subscription_tier": user.get("subscription_tier", "free"),
         "subscription_status": user.get("subscription_status", "none"),
+        "is_admin": is_admin(user),
     }
 
 
@@ -367,9 +405,10 @@ async def upload_track(
         raise HTTPException(status_code=400, detail=f"Unsupported file type .{ext}")
     data = await file.read()
     size_mb = len(data) / (1024 * 1024)
+    admin = is_admin(user)
     tier = user.get("subscription_tier", "free")
-    limits = TIER_LIMITS[tier]
-    if size_mb > limits["max_file_mb"]:
+    limits = await get_effective_limits(tier)
+    if not admin and size_mb > limits["max_file_mb"]:
         raise HTTPException(status_code=400, detail=f"File exceeds {limits['max_file_mb']}MB for {tier} tier")
 
     track_id = f"trk_{uuid.uuid4().hex[:12]}"
@@ -377,7 +416,7 @@ async def upload_track(
     storage_path = build_path("originals", user["user_id"], storage_filename)
     duration = probe_duration(data, ext)
     max_dur = limits.get("max_duration_sec")
-    if max_dur is not None and duration > max_dur:
+    if not admin and max_dur is not None and duration > max_dur:
         raise HTTPException(
             status_code=400,
             detail=f"Track length {int(duration)}s exceeds {tier} tier limit of {int(max_dur/60)} min. Upgrade for longer tracks.",
@@ -443,9 +482,10 @@ async def process_track(
     session_token: Optional[str] = Cookie(None),
 ):
     user = await resolve_user(db, authorization, session_token)
+    admin = is_admin(user)
     # Monthly quota check
     tier = user.get("subscription_tier", "free")
-    limits = TIER_LIMITS[tier]
+    limits = await get_effective_limits(tier)
     quota = limits["max_tracks_per_month"]
     month_start = utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     count = await db.tracks.count_documents({
@@ -453,7 +493,7 @@ async def process_track(
         "status": "mastered",
         "mastered_at": {"$gte": iso(month_start)},
     })
-    if count >= quota:
+    if not admin and count >= quota:
         raise HTTPException(status_code=402, detail=f"Monthly export quota reached for {tier} tier. Upgrade to continue.")
 
     track = await db.tracks.find_one(
@@ -466,16 +506,16 @@ async def process_track(
     if not preset:
         raise HTTPException(status_code=400, detail="Unknown preset")
 
-    # Tier: preset allowlist check
+    # Tier: preset allowlist check (admin bypass)
     allowed = limits.get("allowed_presets")
-    if allowed is not None and body.preset_id not in allowed:
+    if not admin and allowed is not None and body.preset_id not in allowed:
         raise HTTPException(
             status_code=402,
             detail=f"'{preset['name']}' preset requires Pro tier. Upgrade to unlock all presets.",
         )
 
-    # Tier: advanced controls (intensity / EQ / input_gain) gated behind Pro+
-    adv = limits.get("advanced_controls", False)
+    # Tier: advanced controls gated behind Pro+ (admin bypass)
+    adv = admin or limits.get("advanced_controls", False)
     has_custom = any(v is not None for v in (body.intensity, body.eq_low, body.eq_mid, body.eq_high, body.input_gain))
     if has_custom and not adv:
         raise HTTPException(
@@ -697,6 +737,8 @@ async def create_checkout(
             "user_id": user["user_id"],
             "plan": body.plan,
             "billing": body.billing,
+            "discount_code": (discount_info or {}).get("code", ""),
+            "discount_percent": str((discount_info or {}).get("percent", 0)),
         },
     )
     session = await sc.create_checkout_session(ckreq)
@@ -709,11 +751,13 @@ async def create_checkout(
         "currency": "usd",
         "plan": body.plan,
         "billing": body.billing,
+        "discount_code": (discount_info or {}).get("code"),
+        "discount_percent": (discount_info or {}).get("percent"),
         "payment_status": "pending",
         "status": "open",
         "created_at": iso(utcnow()),
     })
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.session_id, "amount": amount, "discount": discount_info}
 
 
 @api.get("/payments/status/{session_id}")
@@ -800,6 +844,240 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
+# ---------------- ADMIN ----------------
+async def require_admin(user: dict):
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+
+@api.get("/admin/settings")
+async def admin_get_settings(
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {"draft": {}, "applied": {}}
+    return {
+        "draft": s.get("draft", {}),
+        "applied": s.get("applied", {}),
+        "defaults": {
+            "pro_max_duration_sec": TIER_LIMITS["pro"]["max_duration_sec"],
+            "studio_max_duration_sec": TIER_LIMITS["studio"]["max_duration_sec"],
+        },
+    }
+
+
+@api.put("/admin/settings/draft")
+async def admin_put_draft(
+    body: dict,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    # Only allow known keys
+    allowed_keys = {"pro_max_duration_sec", "studio_max_duration_sec"}
+    clean = {k: int(v) for k, v in body.items() if k in allowed_keys and v is not None}
+    # Clamp to 30s..1800s sanity range
+    for k in clean:
+        clean[k] = max(30, min(1800, clean[k]))
+    await db.app_settings.update_one(
+        {"_id": "global"},
+        {"$set": {"draft": clean, "updated_at": iso(utcnow())}},
+        upsert=True,
+    )
+    return {"ok": True, "draft": clean}
+
+
+@api.post("/admin/apply")
+async def admin_apply_changes(
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
+    draft = s.get("draft", {})
+    await db.app_settings.update_one(
+        {"_id": "global"},
+        {"$set": {"applied": draft, "applied_at": iso(utcnow())}},
+        upsert=True,
+    )
+    # Also flip pending discounts to active
+    result = await db.discount_codes.update_many({"pending": True}, {"$set": {"active": True, "pending": False}})
+    return {"ok": True, "applied": draft, "discount_activated": result.modified_count}
+
+
+@api.get("/admin/discounts")
+async def admin_list_discounts(
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    cursor = db.discount_codes.find({}, {"_id": 0}).sort("created_at", -1)
+    codes = await cursor.to_list(500)
+    return {"discounts": codes}
+
+
+class DiscountCreate(BaseModel):
+    code: str
+    plan: str  # all | pro | studio
+    percent: int
+
+
+@api.post("/admin/discounts")
+async def admin_add_discount(
+    body: DiscountCreate,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    if body.plan not in ("all", "pro", "studio"):
+        raise HTTPException(status_code=400, detail="plan must be all|pro|studio")
+    allowed_pct = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50}
+    if body.percent not in allowed_pct:
+        raise HTTPException(status_code=400, detail=f"percent must be one of {sorted(allowed_pct)}")
+    code = body.code.upper().strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Code required")
+    doc = {
+        "code": code,
+        "plan": body.plan,
+        "percent": body.percent,
+        "active": False,
+        "pending": True,  # activated on apply
+        "created_at": iso(utcnow()),
+        "created_by": user["user_id"],
+    }
+    try:
+        await db.discount_codes.insert_one(doc)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Code already exists")
+    return {"ok": True, "discount": {k: v for k, v in doc.items() if k != "_id"}}
+
+
+@api.delete("/admin/discounts/{code}")
+async def admin_delete_discount(
+    code: str,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+    r = await db.discount_codes.delete_one({"code": code.upper().strip()})
+    return {"ok": True, "deleted": r.deleted_count}
+
+
+@api.post("/payments/validate-discount")
+async def validate_discount(
+    body: dict,
+):
+    """Public endpoint — checks if a discount code is valid for a given plan, returns new amount."""
+    code = (body.get("code") or "").strip()
+    plan = body.get("plan")
+    billing = body.get("billing", "monthly")
+    if plan not in PLANS or billing not in PLANS[plan]:
+        raise HTTPException(status_code=400, detail="Invalid plan/billing")
+    base = float(PLANS[plan][billing]["amount"])
+    if not code:
+        return {"valid": False, "amount": base}
+    new_amount, dc = await apply_discount_code(code, plan, base)
+    if not dc:
+        return {"valid": False, "amount": base}
+    return {
+        "valid": True,
+        "amount": new_amount,
+        "percent": dc["percent"],
+        "original_amount": base,
+        "code": dc["code"],
+    }
+
+
+# ---------------- PRESET SAMPLES ----------------
+PRESET_SAMPLES: dict = {}
+
+
+def _generate_demo_audio() -> bytes:
+    """Generate a 12s musical demo using ffmpeg lavfi (chord + beat)."""
+    import tempfile, subprocess
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        out = f.name
+    try:
+        # Layered chord: root + maj third + fifth + octave, plus low noise bed.
+        # Kick via tremolo on a sub-sine to avoid escaping issues with mod().
+        fc = (
+            "[0]volume=0.18[a];"
+            "[1]volume=0.14[b];"
+            "[2]volume=0.12[c];"
+            "[3]volume=0.10[d];"
+            "[4]tremolo=f=2:d=0.9,volume=0.25[e];"
+            "[5]volume=0.05[n];"
+            "[a][b][c][d][e][n]amix=inputs=6:normalize=0,"
+            "aformat=sample_fmts=s16:sample_rates=44100:channel_layouts=stereo"
+        )
+        subprocess.run([
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "sine=f=220:d=12",
+            "-f", "lavfi", "-i", "sine=f=277.18:d=12",
+            "-f", "lavfi", "-i", "sine=f=329.63:d=12",
+            "-f", "lavfi", "-i", "sine=f=440:d=12",
+            "-f", "lavfi", "-i", "sine=f=60:d=12",  # sub bass kick-ish (shaped by tremolo)
+            "-f", "lavfi", "-i", "anoisesrc=color=brown:d=12",
+            "-filter_complex", fc,
+            out,
+        ], check=True, timeout=60)
+        with open(out, "rb") as rf:
+            return rf.read()
+    finally:
+        try:
+            os.unlink(out)
+        except OSError:
+            pass
+
+
+async def ensure_preset_samples():
+    if PRESET_SAMPLES:
+        return
+    try:
+        original = _generate_demo_audio()
+    except Exception as e:
+        logger.error(f"Demo audio generation failed: {e}")
+        return
+    for preset in PRESETS:
+        try:
+            mastered = apply_preset(original, "wav", preset["filter"], "wav")
+            PRESET_SAMPLES[preset["id"]] = {"original": original, "mastered": mastered}
+        except Exception as e:
+            logger.error(f"Preset sample gen failed for {preset['id']}: {e}")
+    logger.info(f"Generated {len(PRESET_SAMPLES)} preset samples")
+
+
+@api.get("/presets/{preset_id}/sample/{which}")
+async def preset_sample(preset_id: str, which: str):
+    if which not in ("original", "mastered"):
+        raise HTTPException(status_code=400, detail="which must be original|mastered")
+    if preset_id not in PRESET_MAP:
+        raise HTTPException(status_code=404, detail="Unknown preset")
+    if not PRESET_SAMPLES:
+        await ensure_preset_samples()
+    sample = PRESET_SAMPLES.get(preset_id)
+    if not sample:
+        raise HTTPException(status_code=503, detail="Sample not ready, please retry")
+    data = sample[which]
+    return Response(
+        content=data,
+        media_type="audio/wav",
+        headers={
+            "Content-Length": str(len(data)),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=86400",
+        },
+    )
+
+
 # ---------------- STARTUP ----------------
 @app.on_event("startup")
 async def on_startup():
@@ -807,6 +1085,14 @@ async def on_startup():
         init_storage()
     except Exception as e:
         logger.error(f"Storage init failed: {e}")
+    # Indexes
+    try:
+        await db.discount_codes.create_index("code", unique=True)
+    except Exception:
+        pass
+    # Kick off sample generation in background
+    import asyncio
+    asyncio.create_task(ensure_preset_samples())
     # Seed demo user (idempotent)
     demo_email = "demo@sonically.io"
     existing = await db.users.find_one({"email": demo_email}, {"_id": 0})

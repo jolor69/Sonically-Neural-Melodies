@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import Workspace from "./pages/Workspace";
 import Pricing from "./pages/Pricing";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import Admin from "./pages/Admin";
 
 function AppRouter() {
   const location = useLocation();
@@ -29,6 +30,7 @@ function AppRouter() {
       <Route path="/workspace/:trackId" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
+      <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
     </Routes>
   );
 }

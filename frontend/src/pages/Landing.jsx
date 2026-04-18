@@ -256,7 +256,7 @@ export default function Landing() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {presets.map((p, i) => (
             <div key={p.id} className="fade-up" style={{ animationDelay: `${i * 60}ms` }}>
-              <PresetCard preset={p} onClick={() => {}} />
+              <PresetCard preset={p} onClick={() => {}} enableMiniPlayer />
             </div>
           ))}
         </div>
