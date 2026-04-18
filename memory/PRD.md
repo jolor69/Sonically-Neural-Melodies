@@ -54,15 +54,26 @@ Build an online audio mastering tool with:
 - PaymentSuccess.jsx polling: extended MAX_ATTEMPTS to 25 with progressive backoff (~2 min total), so the success UI reliably transitions after Stripe checkout.
 - /api/payments/status/{session_id}: tier upgrade is now idempotent and runs in both the Stripe success path AND the "No such checkout.session" fallback path (previously the fallback path returned paid without upgrading). Verified via curl — user flipped free → pro on first poll.
 
+## PayPal Integration (2026-02-18)
+- Added PayPal Orders v2 REST integration (sandbox + live credentials in .env, PAYPAL_MODE switches).
+- New module: `/app/backend/paypal.py` (httpx-based — token fetch, create_order, capture_order, get_order).
+- New endpoints:
+  - `GET  /api/payments/paypal/config` (public — returns client_id + mode for JS SDK)
+  - `POST /api/payments/paypal/create-order` (auth — creates PayPal order, inserts payment_transactions row with provider='paypal')
+  - `POST /api/payments/paypal/capture-order/{order_id}` (auth — captures order, idempotently upgrades user tier; handles "already captured" 422 gracefully; also runs tier upgrade if a prior webhook marked paid without upgrading)
+- `/api/payments/status/{session_id}` now branches on `provider` — PayPal txs skip Stripe retrieval and return DB state directly.
+- Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
+- Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
+
 ## Test Results (iteration 1)
 - Backend: **30/30 tests passed**
 - Frontend: **All flows verified**
 
 ## Prioritized Backlog
 ### P1
-- PayPal integration (user needs to provide sandbox client_id + secret)
 - Download format selection per tier (MP3 320 / FLAC / WAV24 / hi-res 24-96)
 - Per-platform LUFS targeting UI (Spotify -14, YouTube -14, Apple -16, Tidal -14)
+- Email receipts on successful payment (Resend / SendGrid)
 
 ### P2
 - Custom user presets (save/load)
