@@ -84,14 +84,54 @@ class ProcessRequest(BaseModel):
 
 
 # ---------------- PRICING ----------------
+# Base/default pricing — admin-overridable via app_settings
+DEFAULT_PRICING = {
+    "pro_monthly": 5.49,
+    "studio_monthly": 14.29,
+    "yearly_discount_percent": 25.0,  # yearly = monthly * 12 * (1 - discount/100)
+}
+
+
+async def get_effective_pricing() -> dict:
+    """Returns admin-configured pricing or defaults."""
+    s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
+    applied = s.get("applied", {})
+    return {
+        "pro_monthly": float(applied.get("pro_monthly_price", DEFAULT_PRICING["pro_monthly"])),
+        "studio_monthly": float(applied.get("studio_monthly_price", DEFAULT_PRICING["studio_monthly"])),
+        "yearly_discount_percent": float(applied.get("yearly_discount_percent", DEFAULT_PRICING["yearly_discount_percent"])),
+    }
+
+
+async def get_effective_plans() -> dict:
+    """Builds PLANS dict with admin-configured monthly prices + derived yearly."""
+    p = await get_effective_pricing()
+    disc = p["yearly_discount_percent"]
+    pro_m = round(p["pro_monthly"], 2)
+    studio_m = round(p["studio_monthly"], 2)
+    pro_y = round(pro_m * 12 * (100 - disc) / 100, 2)
+    studio_y = round(studio_m * 12 * (100 - disc) / 100, 2)
+    return {
+        "pro": {
+            "monthly": {"amount": pro_m, "label": "Pro Monthly"},
+            "yearly": {"amount": pro_y, "label": "Pro Yearly"},
+        },
+        "studio": {
+            "monthly": {"amount": studio_m, "label": "Studio Monthly"},
+            "yearly": {"amount": studio_y, "label": "Studio Yearly"},
+        },
+    }
+
+
+# Static PLANS is kept as a fallback/default reference but callers should use get_effective_plans()
 PLANS = {
     "pro": {
-        "monthly": {"amount": 5.49, "label": "Pro Monthly"},
-        "yearly": {"amount": 49.49, "label": "Pro Yearly"},
+        "monthly": {"amount": DEFAULT_PRICING["pro_monthly"], "label": "Pro Monthly"},
+        "yearly": {"amount": round(DEFAULT_PRICING["pro_monthly"] * 12 * 0.75, 2), "label": "Pro Yearly"},
     },
     "studio": {
-        "monthly": {"amount": 14.29, "label": "Studio Monthly"},
-        "yearly": {"amount": 131.99, "label": "Studio Yearly"},
+        "monthly": {"amount": DEFAULT_PRICING["studio_monthly"], "label": "Studio Monthly"},
+        "yearly": {"amount": round(DEFAULT_PRICING["studio_monthly"] * 12 * 0.75, 2), "label": "Studio Yearly"},
     },
 }
 
@@ -224,6 +264,8 @@ async def list_presets():
 
 @api.get("/plans")
 async def list_plans():
+    plans = await get_effective_plans()
+    pricing = await get_effective_pricing()
     # Expose available download formats per tier
     tier_formats = {}
     for tier, rank in TIER_RANK.items():
@@ -233,7 +275,8 @@ async def list_plans():
             if TIER_RANK[f["tier"]] <= rank
         ]
     return {
-        "plans": PLANS,
+        "plans": plans,
+        "pricing": pricing,
         "tier_limits": TIER_LIMITS,
         "download_formats": [
             {"id": fid, "label": f["label"], "ext": f["ext"], "tier": f["tier"]}
@@ -709,214 +752,26 @@ def _public_track(t: dict) -> dict:
     }
 
 
-# ---------------- STRIPE ----------------
-@api.post("/payments/checkout")
-async def create_checkout(
-    body: CheckoutRequest,
-    request: Request,
-    authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
-):
-    user = await resolve_user(db, authorization, session_token)
-    plan = PLANS.get(body.plan)
-    if not plan or body.billing not in plan:
-        raise HTTPException(status_code=400, detail="Invalid plan or billing")
-    amount = float(plan[body.billing]["amount"])
-
-    # Apply discount code if present
-    discount_info = None
-    if body.discount_code:
-        amount, dc = await apply_discount_code(body.discount_code, body.plan, amount)
-        if dc:
-            discount_info = {"code": dc["code"], "percent": dc["percent"]}
-
-    from emergentintegrations.payments.stripe.checkout import (
-        StripeCheckout, CheckoutSessionRequest,
-    )
-    api_key = os.environ["STRIPE_API_KEY"]
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    sc = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
-
-    origin = body.origin_url.rstrip("/")
-    success_url = f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{origin}/pricing"
-
-    ckreq = CheckoutSessionRequest(
-        amount=amount,
-        currency="usd",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "user_id": user["user_id"],
-            "plan": body.plan,
-            "billing": body.billing,
-            "discount_code": (discount_info or {}).get("code", ""),
-            "discount_percent": str((discount_info or {}).get("percent", 0)),
-        },
-    )
-    session = await sc.create_checkout_session(ckreq)
-
-    await db.payment_transactions.insert_one({
-        "session_id": session.session_id,
-        "user_id": user["user_id"],
-        "email": user["email"],
-        "amount": amount,
-        "currency": "usd",
-        "plan": body.plan,
-        "billing": body.billing,
-        "discount_code": (discount_info or {}).get("code"),
-        "discount_percent": (discount_info or {}).get("percent"),
-        "payment_status": "pending",
-        "status": "open",
-        "created_at": iso(utcnow()),
-    })
-    return {"url": session.url, "session_id": session.session_id, "amount": amount, "discount": discount_info}
-
-
+# ---------------- PAYMENT STATUS (PayPal only — Stripe removed) ----------------
 @api.get("/payments/status/{session_id}")
 async def payments_status(
     session_id: str,
-    request: Request,
     authorization: Optional[str] = Header(None),
     session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    await resolve_user(db, authorization, session_token)
     tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
-
-    # PayPal transactions: skip Stripe, return DB state directly (capture endpoint handles upgrade)
-    if tx.get("provider") == "paypal":
-        return {
-            "status": tx.get("status", "open"),
-            "payment_status": tx.get("payment_status", "pending"),
-            "amount_total": int(float(tx.get("amount", 0)) * 100),
-            "currency": tx.get("currency", "usd"),
-            "plan": tx.get("plan"),
-            "billing": tx.get("billing"),
-            "provider": "paypal",
-        }
-
-    # Instantiate StripeCheckout so it sets stripe.api_base to the emergent proxy.
-    # Then call stripe.checkout.Session.retrieve() directly — bypassing the
-    # library's Pydantic validator which has a bug with StripeObject metadata.
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    api_key = os.environ["STRIPE_API_KEY"]
-    host_url = str(request.base_url).rstrip("/")
-    StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")  # init side-effects
-    import stripe
-    session = None
-    try:
-        session = stripe.checkout.Session.retrieve(session_id)
-    except stripe.error.InvalidRequestError as e:
-        # Emergent proxy returns 404 for sessions that haven't been interacted with yet.
-        # Fall back to our stored tx state (which may have been updated by the webhook).
-        if "No such checkout.session" not in str(e):
-            logger.error(f"Stripe retrieve failed: {e}")
-            raise HTTPException(status_code=502, detail="Unable to fetch payment status")
-    except Exception as e:
-        logger.error(f"Stripe retrieve failed: {e}")
-        raise HTTPException(status_code=502, detail="Unable to fetch payment status")
-
-    if session is not None:
-        session_status = getattr(session, "status", None) or "open"
-        payment_status = getattr(session, "payment_status", None) or "unpaid"
-        amount_total = getattr(session, "amount_total", None)
-        currency = getattr(session, "currency", None)
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {"$set": {
-                "status": session_status,
-                "payment_status": payment_status,
-                "updated_at": iso(utcnow()),
-            }},
-        )
-    else:
-        # Fallback to stored tx state
-        session_status = tx.get("status", "open")
-        payment_status = tx.get("payment_status", "pending")
-        amount_total = int(float(tx.get("amount", 0)) * 100)
-        currency = tx.get("currency", "usd")
-
-    # Idempotent tier upgrade — runs whenever we detect paid, regardless of source
-    if payment_status == "paid":
-        plan = tx.get("plan")
-        if plan in ("pro", "studio"):
-            user_doc = await db.users.find_one({"user_id": tx["user_id"]}, {"_id": 0})
-            if user_doc and user_doc.get("subscription_tier") != plan:
-                await db.users.update_one(
-                    {"user_id": tx["user_id"]},
-                    {"$set": {
-                        "subscription_tier": plan,
-                        "subscription_status": "active",
-                        "subscription_billing": tx.get("billing"),
-                        "subscription_activated_at": iso(utcnow()),
-                    }},
-                )
-                # Send receipt email (fire-and-forget, idempotent via receipt_sent flag)
-                if not tx.get("receipt_sent"):
-                    from emails import send_payment_receipt
-                    host_url = str(request.base_url).rstrip("/")
-                    await send_payment_receipt(
-                        to_email=user_doc.get("email") or tx.get("email"),
-                        name=user_doc.get("name", ""),
-                        plan=plan,
-                        billing=tx.get("billing", "monthly"),
-                        amount=float(tx.get("amount", 0)),
-                        currency=tx.get("currency", "usd"),
-                        provider="stripe",
-                        txn_id=session_id,
-                        app_url=host_url,
-                    )
-                    await db.payment_transactions.update_one(
-                        {"session_id": session_id},
-                        {"$set": {"receipt_sent": True, "receipt_sent_at": iso(utcnow())}},
-                    )
-
     return {
-        "status": session_status,
-        "payment_status": payment_status,
-        "amount_total": amount_total,
-        "currency": currency,
+        "status": tx.get("status", "open"),
+        "payment_status": tx.get("payment_status", "pending"),
+        "amount_total": int(float(tx.get("amount", 0)) * 100),
+        "currency": tx.get("currency", "usd"),
         "plan": tx.get("plan"),
         "billing": tx.get("billing"),
+        "provider": tx.get("provider", "paypal"),
     }
-
-
-@api.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    api_key = os.environ["STRIPE_API_KEY"]
-    host_url = str(request.base_url).rstrip("/")
-    sc = StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")
-    body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    try:
-        evt = await sc.handle_webhook(body, sig)
-    except Exception as e:
-        logger.error(f"stripe webhook error: {e}")
-        raise HTTPException(status_code=400, detail="bad signature")
-
-    if evt.payment_status == "paid":
-        tx = await db.payment_transactions.find_one({"session_id": evt.session_id}, {"_id": 0})
-        if tx and tx.get("payment_status") != "paid":
-            await db.payment_transactions.update_one(
-                {"session_id": evt.session_id},
-                {"$set": {"payment_status": "paid", "status": "complete"}},
-            )
-            plan = tx.get("plan")
-            if plan in ("pro", "studio"):
-                await db.users.update_one(
-                    {"user_id": tx["user_id"]},
-                    {"$set": {
-                        "subscription_tier": plan,
-                        "subscription_status": "active",
-                        "subscription_billing": tx.get("billing"),
-                        "subscription_activated_at": iso(utcnow()),
-                    }},
-                )
-    return {"received": True}
 
 
 # ---------------- PAYPAL ----------------
@@ -934,7 +789,8 @@ async def paypal_create_order(
     session_token: Optional[str] = Cookie(None),
 ):
     user = await resolve_user(db, authorization, session_token)
-    plan = PLANS.get(body.plan)
+    plans = await get_effective_plans()
+    plan = plans.get(body.plan)
     if not plan or body.billing not in plan:
         raise HTTPException(status_code=400, detail="Invalid plan or billing")
     amount = float(plan[body.billing]["amount"])
@@ -1093,6 +949,9 @@ async def admin_get_settings(
         "defaults": {
             "pro_max_duration_sec": TIER_LIMITS["pro"]["max_duration_sec"],
             "studio_max_duration_sec": TIER_LIMITS["studio"]["max_duration_sec"],
+            "pro_monthly_price": DEFAULT_PRICING["pro_monthly"],
+            "studio_monthly_price": DEFAULT_PRICING["studio_monthly"],
+            "yearly_discount_percent": DEFAULT_PRICING["yearly_discount_percent"],
         },
     }
 
@@ -1105,12 +964,21 @@ async def admin_put_draft(
 ):
     user = await resolve_user(db, authorization, session_token)
     await require_admin(user)
-    # Only allow known keys
-    allowed_keys = {"pro_max_duration_sec", "studio_max_duration_sec"}
-    clean = {k: int(v) for k, v in body.items() if k in allowed_keys and v is not None}
-    # Clamp to 30s..1800s sanity range
-    for k in clean:
-        clean[k] = max(30, min(1800, clean[k]))
+    # Allow duration + pricing keys
+    duration_keys = {"pro_max_duration_sec", "studio_max_duration_sec"}
+    price_keys = {"pro_monthly_price", "studio_monthly_price", "yearly_discount_percent"}
+    clean = {}
+    for k, v in body.items():
+        if v is None:
+            continue
+        if k in duration_keys:
+            clean[k] = max(30, min(1800, int(v)))
+        elif k in price_keys:
+            fv = float(v)
+            if k == "yearly_discount_percent":
+                clean[k] = max(0.0, min(80.0, round(fv, 2)))
+            else:
+                clean[k] = max(0.99, min(999.0, round(fv, 2)))
     await db.app_settings.update_one(
         {"_id": "global"},
         {"$set": {"draft": clean, "updated_at": iso(utcnow())}},
@@ -1128,14 +996,17 @@ async def admin_apply_changes(
     await require_admin(user)
     s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
     draft = s.get("draft", {})
+    applied = s.get("applied", {})
+    # Merge draft into applied (so partial drafts don't clobber unrelated keys)
+    merged = {**applied, **draft}
     await db.app_settings.update_one(
         {"_id": "global"},
-        {"$set": {"applied": draft, "applied_at": iso(utcnow())}},
+        {"$set": {"applied": merged, "draft": {}, "applied_at": iso(utcnow())}},
         upsert=True,
     )
     # Also flip pending discounts to active
     result = await db.discount_codes.update_many({"pending": True}, {"$set": {"active": True, "pending": False}})
-    return {"ok": True, "applied": draft, "discount_activated": result.modified_count}
+    return {"ok": True, "applied": merged, "discount_activated": result.modified_count}
 
 
 @api.get("/admin/discounts")
@@ -1208,9 +1079,10 @@ async def validate_discount(
     code = (body.get("code") or "").strip()
     plan = body.get("plan")
     billing = body.get("billing", "monthly")
-    if plan not in PLANS or billing not in PLANS[plan]:
+    plans = await get_effective_plans()
+    if plan not in plans or billing not in plans[plan]:
         raise HTTPException(status_code=400, detail="Invalid plan/billing")
-    base = float(PLANS[plan][billing]["amount"])
+    base = float(plans[plan][billing]["amount"])
     if not code:
         return {"valid": False, "amount": base}
     new_amount, dc = await apply_discount_code(code, plan, base)

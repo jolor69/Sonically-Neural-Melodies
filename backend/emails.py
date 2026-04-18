@@ -96,7 +96,7 @@ def _receipt_html(*, name: str, plan: str, billing: str, amount: float, currency
               <a href="{app_url}/dashboard" style="display:inline-block;background:#E28C22;color:#0A0A0C;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;">Back to studio →</a>
               <p style="margin:24px 0 0;font-size:12px;color:#6B7280;line-height:1.6;">
                 Questions? Reply to this email or write to <a href="mailto:neural.melodies.notes@gmail.com" style="color:#E28C22;text-decoration:none;">neural.melodies.notes@gmail.com</a>.
-                <br/>Keep this receipt for your records.
+                <br/>See our <a href="{app_url}/terms" style="color:#E28C22;text-decoration:none;">Terms &amp; Refund Policy</a>. Keep this receipt for your records.
               </p>
             </td>
           </tr>

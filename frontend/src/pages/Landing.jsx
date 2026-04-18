@@ -517,8 +517,10 @@ export default function Landing() {
           </div>
           <div className="text-center md:text-right">
             <div className="label-overline">Sonically © 2026 — Mastered in analog spirit</div>
-            <div className="text-xs text-[#9CA3AF] mt-2">
-              © Neural Melodies. All rights reserved.
+            <div className="text-xs text-[#9CA3AF] mt-2 flex items-center gap-3 justify-center md:justify-end">
+              <span>© Neural Melodies. All rights reserved.</span>
+              <span className="text-[#2A2A35]">·</span>
+              <Link to="/terms" data-testid="footer-terms-link" className="hover:text-[#E28C22]">Terms &amp; Refunds</Link>
             </div>
           </div>
         </div>

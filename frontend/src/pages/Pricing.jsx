@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
-import { Check, ArrowRight, Loader2, CircleAlert } from "lucide-react";
+import { Check, CircleAlert } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import PayPalCheckoutButton from "../components/PayPalCheckoutButton";
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
+import { Link } from "react-router-dom";
 
 export default function Pricing() {
   const { user, refresh } = useAuth();
   const [billing, setBilling] = useState("yearly");
-  const [busyPlan, setBusyPlan] = useState(null);
   const [code, setCode] = useState("");
   const [validating, setValidating] = useState(false);
-  const [discount, setDiscount] = useState(null); // { code, percent, amount, plan? }
+  const [discount, setDiscount] = useState(null);
   const [paypalConfig, setPaypalConfig] = useState(null);
+  const [plans, setPlans] = useState(null); // from /api/plans
 
   useEffect(() => { refresh?.(); }, []);
 
@@ -24,27 +25,24 @@ export default function Pricing() {
       .catch(() => setPaypalConfig(null));
   }, []);
 
+  useEffect(() => {
+    api.get("/plans")
+      .then((r) => setPlans(r.data.plans))
+      .catch(() => setPlans(null));
+  }, []);
+
   const validateCode = async () => {
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) { setDiscount(null); return; }
     setValidating(true);
     try {
-      // Validate against pro first; backend returns valid=false if code doesn't match
-      const r = await api.post("/payments/validate-discount", {
-        code: trimmed,
-        plan: "pro",
-        billing,
-      });
+      const r = await api.post("/payments/validate-discount", { code: trimmed, plan: "pro", billing });
       if (r.data.valid) {
         setDiscount({ code: r.data.code, percent: r.data.percent });
         toast.success(`${r.data.percent}% off applied`);
         return;
       }
-      const r2 = await api.post("/payments/validate-discount", {
-        code: trimmed,
-        plan: "studio",
-        billing,
-      });
+      const r2 = await api.post("/payments/validate-discount", { code: trimmed, plan: "studio", billing });
       if (r2.data.valid) {
         setDiscount({ code: r2.data.code, percent: r2.data.percent, plan: "studio" });
         toast.success(`${r2.data.percent}% off applied (Studio)`);
@@ -52,30 +50,30 @@ export default function Pricing() {
       }
       setDiscount(null);
       toast.error("Invalid or inactive code");
-    } catch (e) {
+    } catch {
       toast.error("Couldn't validate code");
     } finally {
       setValidating(false);
     }
   };
 
-  const checkout = async (plan) => {
-    setBusyPlan(plan);
-    try {
-      const origin_url = window.location.origin;
-      const payload = { plan, billing, origin_url };
-      if (discount?.code) payload.discount_code = discount.code;
-      const r = await api.post("/payments/checkout", payload);
-      window.location.href = r.data.url;
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Checkout failed");
-      setBusyPlan(null);
-    }
-  };
-
   const applyDiscountPrice = (base) => discount?.percent
     ? Number((base * (100 - discount.percent) / 100).toFixed(2))
-    : base;
+    : Number(base);
+
+  // Derived display prices from live /api/plans response
+  const proMonthly = Number(plans?.pro?.monthly?.amount ?? 5.49);
+  const proYearly = Number(plans?.pro?.yearly?.amount ?? 49.49);
+  const studioMonthly = Number(plans?.studio?.monthly?.amount ?? 14.29);
+  const studioYearly = Number(plans?.studio?.yearly?.amount ?? 131.99);
+
+  const proPerMo = billing === "yearly" ? Number((proYearly / 12).toFixed(2)) : proMonthly;
+  const studioPerMo = billing === "yearly" ? Number((studioYearly / 12).toFixed(2)) : studioMonthly;
+
+  // Yearly savings % (computed from live prices)
+  const yearlySavePct = proMonthly > 0
+    ? Math.round((1 - (proYearly / 12) / proMonthly) * 100)
+    : 25;
 
   const pricingInner = (
     <div className="min-h-screen bg-[#0A0A0C] text-white">
@@ -101,19 +99,17 @@ export default function Pricing() {
                 onClick={() => setBilling(b)}
                 data-testid={`pricing-billing-${b}`}
                 className={`px-5 py-2 rounded-full text-sm font-semibold capitalize transition ${
-                  billing === b
-                    ? "bg-[#E28C22] text-[#0A0A0C]"
-                    : "text-white/70 hover:text-white"
+                  billing === b ? "bg-[#E28C22] text-[#0A0A0C]" : "text-white/70 hover:text-white"
                 }`}
               >
-                {b} {b === "yearly" && (
+                {b} {b === "yearly" && yearlySavePct > 0 && (
                   <span
                     className={`ml-2 text-[10px] font-bold tracking-widest ${
                       billing === b ? "text-[#0A0A0C]" : "text-[#E28C22]"
                     }`}
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
-                    SAVE 25%
+                    SAVE {yearlySavePct}%
                   </span>
                 )}
               </button>
@@ -173,17 +169,16 @@ export default function Pricing() {
               "4 presets: Universal · Fire · Clarity · Tape",
               "Tracks up to 2 minutes",
             ]}
-            ctaLabel={user?.subscription_tier === "free" ? "Current plan" : "Downgrade coming soon"}
-            disabled
             testId="plan-free"
+            current={user?.subscription_tier === "free"}
           />
           <PriceCard
             name="Pro"
             tagline="Serious creators who release"
-            price={`$${applyDiscountPrice(billing === "yearly" ? 4.12 : 5.49)}`}
+            price={`$${applyDiscountPrice(proPerMo)}`}
             period="/ month"
-            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(49.49)}/yr` : "Billed monthly"}
-            strike={discount ? (billing === "yearly" ? "$4.12" : "$5.49") : null}
+            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(proYearly)}/yr` : "Billed monthly"}
+            strike={discount ? `$${proPerMo.toFixed(2)}` : null}
             highlight
             badge="Popular"
             features={[
@@ -192,17 +187,14 @@ export default function Pricing() {
               "All 8 presets + Intensity & EQ",
               "LUFS targeting · 5-min max per track",
             ]}
-            ctaLabel={user?.subscription_tier === "pro" ? "Current plan" : (busyPlan === "pro" ? "Redirecting…" : "Upgrade to Pro")}
-            onCta={() => checkout("pro")}
-            disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}
-            loading={busyPlan === "pro"}
             testId="plan-pro"
+            current={user?.subscription_tier === "pro"}
             paypalNode={paypalConfig?.client_id ? (
               <PayPalCheckoutButton
                 plan="pro"
                 billing={billing}
                 discountCode={discount?.code}
-                disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}
+                disabled={user?.subscription_tier === "pro"}
                 testId="plan-pro"
               />
             ) : null}
@@ -210,27 +202,24 @@ export default function Pricing() {
           <PriceCard
             name="Studio"
             tagline="Labels, producers, multi-project"
-            price={`$${applyDiscountPrice(billing === "yearly" ? 11.00 : 14.29)}`}
+            price={`$${applyDiscountPrice(studioPerMo)}`}
             period="/ month"
-            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(131.99)}/yr` : "Billed monthly"}
-            strike={discount ? (billing === "yearly" ? "$11.00" : "$14.29") : null}
+            billed={billing === "yearly" ? `Billed $${applyDiscountPrice(studioYearly)}/yr` : "Billed monthly"}
+            strike={discount ? `$${studioPerMo.toFixed(2)}` : null}
             features={[
               "Unlimited exports",
               "Hi-res 24/96 & 24/192",
               "All 8 presets + full controls",
               "Priority processing queue",
             ]}
-            ctaLabel={user?.subscription_tier === "studio" ? "Current plan" : (busyPlan === "studio" ? "Redirecting…" : "Upgrade to Studio")}
-            onCta={() => checkout("studio")}
-            disabled={user?.subscription_tier === "studio" || busyPlan === "studio"}
-            loading={busyPlan === "studio"}
             testId="plan-studio"
+            current={user?.subscription_tier === "studio"}
             paypalNode={paypalConfig?.client_id ? (
               <PayPalCheckoutButton
                 plan="studio"
                 billing={billing}
                 discountCode={discount?.code}
-                disabled={user?.subscription_tier === "studio" || busyPlan === "studio"}
+                disabled={user?.subscription_tier === "studio"}
                 testId="plan-studio"
               />
             ) : null}
@@ -244,7 +233,7 @@ export default function Pricing() {
         <div className="mt-12 text-center bg-[#121216] border border-[#2A2A35] rounded-xl p-6 max-w-3xl mx-auto flex items-center gap-3 justify-center text-sm text-[#9CA3AF]">
           <CircleAlert size={16} className="text-[#E28C22]" />
           <span>
-            Pay with <span className="font-semibold text-white">Stripe</span> (card) or <span className="font-semibold text-white">PayPal</span>. Cancel anytime.
+            Secure checkout via <span className="font-semibold text-white">PayPal</span>. Cancel anytime — see our <Link to="/terms" className="text-[#E28C22] hover:underline">Terms &amp; Refund Policy</Link>.
           </span>
         </div>
       </main>
@@ -269,7 +258,7 @@ export default function Pricing() {
   );
 }
 
-function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, onCta, disabled, loading, highlight, badge, testId, strike, paypalNode }) {
+function PriceCard({ name, tagline, price, period, billed, features, highlight, badge, testId, strike, paypalNode, current }) {
   return (
     <div
       data-testid={testId}
@@ -303,25 +292,23 @@ function PriceCard({ name, tagline, price, period, billed, features, ctaLabel, o
           </li>
         ))}
       </ul>
-      <button
-        onClick={onCta}
-        disabled={disabled}
-        data-testid={`${testId}-cta`}
-        className={`mt-8 text-center font-semibold px-6 py-3 rounded-md transition inline-flex items-center justify-center gap-2 ${
-          highlight && !disabled
-            ? "bg-[#E28C22] text-[#0A0A0C] hover:bg-[#F5A138]"
-            : "border border-[#2A2A35] hover:border-[#E28C22] hover:text-[#E28C22]"
-        } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
-      >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-        {ctaLabel} {highlight && !disabled && !loading && <ArrowRight size={14} />}
-      </button>
-      {paypalNode && (
-        <div className="mt-3" data-testid={`${testId}-paypal-slot`}>
-          <div className="label-overline text-[10px] text-[#6B7280] text-center mb-2">or pay with</div>
-          {paypalNode}
-        </div>
-      )}
+      <div className="mt-8">
+        {current ? (
+          <div
+            data-testid={`${testId}-current-plan`}
+            className="w-full text-center font-semibold px-6 py-3 rounded-md border border-[#10B981] text-[#10B981] bg-[#0B241A]"
+          >
+            Current plan
+          </div>
+        ) : paypalNode ? (
+          <div data-testid={`${testId}-paypal-slot`}>
+            <div className="label-overline text-[10px] text-[#6B7280] text-center mb-2">checkout with</div>
+            {paypalNode}
+          </div>
+        ) : (
+          <div className="text-center text-xs text-[#6B7280] py-3">Free tier — no checkout needed</div>
+        )}
+      </div>
     </div>
   );
 }

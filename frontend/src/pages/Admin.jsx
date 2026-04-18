@@ -4,7 +4,7 @@ import Navbar from "../components/Navbar";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, CheckCircle2, ShieldCheck, Clock, Tag } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckCircle2, ShieldCheck, Clock, Tag, DollarSign, Percent } from "lucide-react";
 
 const PERCENT_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 
@@ -16,9 +16,14 @@ export default function Admin() {
   const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  // Draft form state
+  // Duration sliders (minutes)
   const [proMin, setProMin] = useState(5);
   const [studioMin, setStudioMin] = useState(5);
+
+  // Pricing form
+  const [proPrice, setProPrice] = useState(5.49);
+  const [studioPrice, setStudioPrice] = useState(14.29);
+  const [yearlyDiscount, setYearlyDiscount] = useState(25);
 
   // New discount form
   const [newCode, setNewCode] = useState("");
@@ -31,6 +36,9 @@ export default function Admin() {
     }
   }, [loading, user, navigate]);
 
+  const pick = (data, key, fallback) =>
+    data.draft?.[key] ?? data.applied?.[key] ?? data.defaults?.[key] ?? fallback;
+
   const load = async () => {
     try {
       const [s, d] = await Promise.all([
@@ -39,11 +47,12 @@ export default function Admin() {
       ]);
       setSettings(s.data);
       setDiscounts(d.data.discounts || []);
-      const draftPro = s.data.draft?.pro_max_duration_sec ?? s.data.applied?.pro_max_duration_sec ?? s.data.defaults?.pro_max_duration_sec ?? 300;
-      const draftStudio = s.data.draft?.studio_max_duration_sec ?? s.data.applied?.studio_max_duration_sec ?? s.data.defaults?.studio_max_duration_sec ?? 300;
-      setProMin(Math.round(draftPro / 60));
-      setStudioMin(Math.round(draftStudio / 60));
-    } catch (e) {
+      setProMin(Math.round(pick(s.data, "pro_max_duration_sec", 300) / 60));
+      setStudioMin(Math.round(pick(s.data, "studio_max_duration_sec", 300) / 60));
+      setProPrice(Number(pick(s.data, "pro_monthly_price", 5.49)));
+      setStudioPrice(Number(pick(s.data, "studio_monthly_price", 14.29)));
+      setYearlyDiscount(Number(pick(s.data, "yearly_discount_percent", 25)));
+    } catch {
       toast.error("Failed to load admin data");
     }
   };
@@ -56,10 +65,13 @@ export default function Admin() {
       await api.put("/admin/settings/draft", {
         pro_max_duration_sec: proMin * 60,
         studio_max_duration_sec: studioMin * 60,
+        pro_monthly_price: Number(proPrice),
+        studio_monthly_price: Number(studioPrice),
+        yearly_discount_percent: Number(yearlyDiscount),
       });
       toast.success("Draft saved. Hit Apply to go live.");
       await load();
-    } catch (e) {
+    } catch {
       toast.error("Save failed");
     } finally {
       setBusy(false);
@@ -95,7 +107,7 @@ export default function Admin() {
       const r = await api.post("/admin/apply");
       toast.success(`Applied live. ${r.data.discount_activated || 0} discounts activated.`);
       await load();
-    } catch (e) {
+    } catch {
       toast.error("Apply failed");
     } finally {
       setApplying(false);
@@ -111,14 +123,25 @@ export default function Admin() {
     );
   }
 
-  const appliedPro = settings.applied?.pro_max_duration_sec ?? settings.defaults?.pro_max_duration_sec ?? 300;
-  const appliedStudio = settings.applied?.studio_max_duration_sec ?? settings.defaults?.studio_max_duration_sec ?? 300;
+  // Applied values for "Currently live" displays
+  const appliedProMin = Math.round((settings.applied?.pro_max_duration_sec ?? settings.defaults?.pro_max_duration_sec ?? 300) / 60);
+  const appliedStudioMin = Math.round((settings.applied?.studio_max_duration_sec ?? settings.defaults?.studio_max_duration_sec ?? 300) / 60);
+  const appliedProPrice = Number(settings.applied?.pro_monthly_price ?? settings.defaults?.pro_monthly_price ?? 5.49);
+  const appliedStudioPrice = Number(settings.applied?.studio_monthly_price ?? settings.defaults?.studio_monthly_price ?? 14.29);
+  const appliedDiscount = Number(settings.applied?.yearly_discount_percent ?? settings.defaults?.yearly_discount_percent ?? 25);
 
-  const draftPro = proMin * 60;
-  const draftStudio = studioMin * 60;
-  const hasSettingsDiff = draftPro !== appliedPro || draftStudio !== appliedStudio;
+  const draftProYearly = (Number(proPrice) * 12 * (100 - Number(yearlyDiscount)) / 100).toFixed(2);
+  const draftStudioYearly = (Number(studioPrice) * 12 * (100 - Number(yearlyDiscount)) / 100).toFixed(2);
+
   const pendingCount = discounts.filter((d) => d.pending).length;
-  const needsApply = hasSettingsDiff || pendingCount > 0;
+  const hasDraftDiff = (
+    proMin * 60 !== (settings.applied?.pro_max_duration_sec ?? settings.defaults?.pro_max_duration_sec ?? 300)
+    || studioMin * 60 !== (settings.applied?.studio_max_duration_sec ?? settings.defaults?.studio_max_duration_sec ?? 300)
+    || Math.abs(Number(proPrice) - appliedProPrice) > 0.005
+    || Math.abs(Number(studioPrice) - appliedStudioPrice) > 0.005
+    || Math.abs(Number(yearlyDiscount) - appliedDiscount) > 0.005
+  );
+  const needsApply = hasDraftDiff || pendingCount > 0 || Object.keys(settings.draft || {}).length > 0;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-white pb-28">
@@ -131,7 +154,72 @@ export default function Admin() {
         <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2" style={{ fontFamily: "Outfit" }}>
           Control room.
         </h1>
-        <p className="text-[#9CA3AF] mb-10">Tune duration limits and manage discount codes. Nothing goes live until you hit Apply.</p>
+        <p className="text-[#9CA3AF] mb-10">Tune pricing, duration limits, and discount codes. Nothing goes live until you hit Apply.</p>
+
+        {/* PRICING */}
+        <section className="bg-[#121216] border border-[#2A2A35] rounded-2xl p-6 md:p-8 mb-8" data-testid="admin-pricing-section">
+          <div className="flex items-center gap-2 mb-6">
+            <DollarSign size={18} className="text-[#E28C22]" />
+            <h2 className="text-2xl font-bold" style={{ fontFamily: "Outfit" }}>Pricing</h2>
+          </div>
+          <p className="text-sm text-[#9CA3AF] mb-6">Set monthly prices. Yearly prices are auto-calculated from the monthly price and the yearly discount below.</p>
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {[
+              { key: "pro", label: "Pro · monthly price", val: proPrice, set: setProPrice, applied: appliedProPrice, yearly: draftProYearly },
+              { key: "studio", label: "Studio · monthly price", val: studioPrice, set: setStudioPrice, applied: appliedStudioPrice, yearly: draftStudioYearly },
+            ].map((row) => (
+              <div key={row.key} className="bg-[#0A0A0C] border border-[#2A2A35] rounded-xl p-5">
+                <div className="label-overline mb-2">{row.label}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#6B7280] text-xl font-bold">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.99"
+                    value={row.val}
+                    onChange={(e) => row.set(e.target.value)}
+                    data-testid={`admin-${row.key}-price-input`}
+                    className="bg-transparent border-b border-[#2A2A35] focus:border-[#E28C22] outline-none text-2xl font-bold text-[#E28C22] w-full py-1 mono"
+                  />
+                  <span className="text-[#9CA3AF] text-sm">/ mo</span>
+                </div>
+                <div className="mt-3 text-xs text-[#6B7280]">
+                  Yearly (auto): <span className="mono text-[#E28C22]">${row.yearly}</span> · billed annually
+                </div>
+                <div className="mt-1 text-xs text-[#6B7280]">
+                  Currently live: <span className="mono text-[#9CA3AF]">${row.applied.toFixed(2)}/mo</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[#0A0A0C] border border-[#2A2A35] rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="label-overline flex items-center gap-2">
+                <Percent size={14} /> Yearly discount
+              </div>
+              <div className="mono text-sm text-[#E28C22]" data-testid="admin-yearly-discount-value">
+                {yearlyDiscount}% off
+              </div>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={50}
+              step={1}
+              value={yearlyDiscount}
+              onChange={(e) => setYearlyDiscount(parseInt(e.target.value))}
+              className="w-full accent-[#E28C22]"
+              data-testid="admin-yearly-discount-slider"
+            />
+            <div className="flex justify-between mt-2 label-overline text-[10px]">
+              <span>0%</span>
+              <span>50%</span>
+            </div>
+            <div className="mt-3 text-xs text-[#6B7280]">
+              Currently live: <span className="mono text-[#9CA3AF]">{appliedDiscount}% off yearly</span>
+            </div>
+          </div>
+        </section>
 
         {/* DURATION LIMITS */}
         <section className="bg-[#121216] border border-[#2A2A35] rounded-2xl p-6 md:p-8 mb-8" data-testid="admin-duration-section">
@@ -141,8 +229,8 @@ export default function Admin() {
           </div>
           <div className="grid md:grid-cols-2 gap-8">
             {[
-              { label: "Pro tier", val: proMin, set: setProMin, applied: appliedPro, key: "pro" },
-              { label: "Studio tier", val: studioMin, set: setStudioMin, applied: appliedStudio, key: "studio" },
+              { label: "Pro tier", val: proMin, set: setProMin, applied: appliedProMin, key: "pro" },
+              { label: "Studio tier", val: studioMin, set: setStudioMin, applied: appliedStudioMin, key: "studio" },
             ].map((row) => (
               <div key={row.key} className="bg-[#0A0A0C] border border-[#2A2A35] rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -166,27 +254,28 @@ export default function Admin() {
                   <span>30 min</span>
                 </div>
                 <div className="mt-3 text-xs text-[#6B7280]">
-                  Currently live: <span className="mono text-[#9CA3AF]">{Math.round(row.applied / 60)} min</span>
+                  Currently live: <span className="mono text-[#9CA3AF]">{row.applied} min</span>
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-6 flex items-center gap-3">
-            <button
-              onClick={saveDraft}
-              disabled={busy || !hasSettingsDiff}
-              data-testid="admin-save-draft-btn"
-              className="border border-[#2A2A35] px-4 py-2 rounded-md text-sm hover:border-[#E28C22] hover:text-[#E28C22] disabled:opacity-40"
-            >
-              {busy ? "Saving…" : "Save draft"}
-            </button>
-            {hasSettingsDiff && (
-              <span className="label-overline text-[#E28C22] text-[10px]" data-testid="admin-unsaved-indicator">
-                ● Unsaved draft
-              </span>
-            )}
-          </div>
         </section>
+
+        <div className="mb-8 flex items-center gap-3">
+          <button
+            onClick={saveDraft}
+            disabled={busy || !hasDraftDiff}
+            data-testid="admin-save-draft-btn"
+            className="border border-[#2A2A35] px-4 py-2 rounded-md text-sm hover:border-[#E28C22] hover:text-[#E28C22] disabled:opacity-40"
+          >
+            {busy ? "Saving…" : "Save pricing & limits draft"}
+          </button>
+          {hasDraftDiff && (
+            <span className="label-overline text-[#E28C22] text-[10px]" data-testid="admin-unsaved-indicator">
+              ● Unsaved draft
+            </span>
+          )}
+        </div>
 
         {/* DISCOUNTS */}
         <section className="bg-[#121216] border border-[#2A2A35] rounded-2xl p-6 md:p-8 mb-8" data-testid="admin-discount-section">
@@ -194,7 +283,6 @@ export default function Admin() {
             <Tag size={18} className="text-[#E28C22]" />
             <h2 className="text-2xl font-bold" style={{ fontFamily: "Outfit" }}>Discount codes</h2>
           </div>
-          {/* Create form */}
           <form onSubmit={addDiscount} className="grid sm:grid-cols-[1fr_140px_120px_auto] gap-3 mb-6" data-testid="admin-discount-form">
             <input
               type="text"
@@ -235,7 +323,6 @@ export default function Admin() {
             </button>
           </form>
 
-          {/* List */}
           {discounts.length === 0 ? (
             <div className="text-center py-8 text-[#6B7280]">No discount codes yet.</div>
           ) : (
@@ -280,7 +367,6 @@ export default function Admin() {
           )}
         </section>
 
-        {/* ACCESS INFO */}
         <section className="bg-[#121216] border border-[#A855F7]/40 rounded-2xl p-6 mb-20" data-testid="admin-privileges-section">
           <div className="flex items-start gap-3">
             <ShieldCheck size={18} className="text-[#A855F7] mt-0.5" />
@@ -294,14 +380,11 @@ export default function Admin() {
         </section>
       </main>
 
-      {/* FLOATING APPLY BAR */}
       {needsApply && (
         <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none" data-testid="admin-apply-bar">
           <div className="pointer-events-auto bg-[#121216] border border-[#E28C22] rounded-full shadow-2xl px-6 py-3 flex items-center gap-4">
             <span className="label-overline text-[11px]">
-              {pendingCount > 0 && `${pendingCount} pending discount${pendingCount > 1 ? "s" : ""}`}
-              {pendingCount > 0 && hasSettingsDiff && " · "}
-              {hasSettingsDiff && "draft limits"}
+              Pending changes
             </span>
             <button
               onClick={applyAll}
