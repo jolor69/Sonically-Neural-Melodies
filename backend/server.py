@@ -779,21 +779,48 @@ async def payments_status(
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    # Instantiate StripeCheckout so it sets stripe.api_base to the emergent proxy.
+    # Then call stripe.checkout.Session.retrieve() directly — bypassing the
+    # library's Pydantic validator which has a bug with StripeObject metadata.
     from emergentintegrations.payments.stripe.checkout import StripeCheckout
     api_key = os.environ["STRIPE_API_KEY"]
     host_url = str(request.base_url).rstrip("/")
-    sc = StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")
-    status = await sc.get_checkout_status(session_id)
+    StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")  # init side-effects
+    import stripe
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except stripe.error.InvalidRequestError as e:
+        # Emergent proxy returns 404 for sessions that haven't been interacted with yet.
+        # Treat as still-pending so the frontend keeps polling until the user completes checkout.
+        if "No such checkout.session" in str(e):
+            return {
+                "status": tx.get("status", "open"),
+                "payment_status": tx.get("payment_status", "pending"),
+                "amount_total": int(float(tx.get("amount", 0)) * 100),
+                "currency": tx.get("currency", "usd"),
+                "plan": tx.get("plan"),
+                "billing": tx.get("billing"),
+            }
+        logger.error(f"Stripe retrieve failed: {e}")
+        raise HTTPException(status_code=502, detail="Unable to fetch payment status")
+    except Exception as e:
+        logger.error(f"Stripe retrieve failed: {e}")
+        raise HTTPException(status_code=502, detail="Unable to fetch payment status")
+
+    session_status = getattr(session, "status", None) or "open"
+    payment_status = getattr(session, "payment_status", None) or "unpaid"
+    amount_total = getattr(session, "amount_total", None)
+    currency = getattr(session, "currency", None)
 
     updates = {
-        "status": status.status,
-        "payment_status": status.payment_status,
+        "status": session_status,
+        "payment_status": payment_status,
         "updated_at": iso(utcnow()),
     }
     await db.payment_transactions.update_one({"session_id": session_id}, {"$set": updates})
 
     # Idempotent tier upgrade
-    if status.payment_status == "paid" and tx.get("payment_status") != "paid":
+    if payment_status == "paid" and tx.get("payment_status") != "paid":
         plan = tx.get("plan")
         if plan in ("pro", "studio"):
             await db.users.update_one(
@@ -807,10 +834,10 @@ async def payments_status(
             )
 
     return {
-        "status": status.status,
-        "payment_status": status.payment_status,
-        "amount_total": status.amount_total,
-        "currency": status.currency,
+        "status": session_status,
+        "payment_status": payment_status,
+        "amount_total": amount_total,
+        "currency": currency,
         "plan": tx.get("plan"),
         "billing": tx.get("billing"),
     }
