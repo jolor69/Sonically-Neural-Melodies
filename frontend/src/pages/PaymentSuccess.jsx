@@ -15,6 +15,7 @@ export default function PaymentSuccess() {
   useEffect(() => {
     if (!sessionId) { navigate("/pricing"); return; }
     let attempts = 0;
+    const MAX_ATTEMPTS = 25;
     const poll = async () => {
       attempts++;
       try {
@@ -28,13 +29,19 @@ export default function PaymentSuccess() {
           setState({ loading: false, status: "expired", plan: r.data.plan });
           return;
         }
-        if (attempts >= 8) {
+        if (attempts >= MAX_ATTEMPTS) {
           setState({ loading: false, status: "pending", plan: r.data.plan });
           return;
         }
-        setTimeout(poll, 2000);
+        // Progressive backoff: 2s for first 5, then 3s, 4s, etc.
+        const delay = attempts < 5 ? 2000 : Math.min(2000 + attempts * 500, 6000);
+        setTimeout(poll, delay);
       } catch (e) {
-        setState({ loading: false, status: "error", plan: null });
+        if (attempts >= MAX_ATTEMPTS) {
+          setState({ loading: false, status: "error", plan: null });
+          return;
+        }
+        setTimeout(poll, 3000);
       }
     };
     poll();
