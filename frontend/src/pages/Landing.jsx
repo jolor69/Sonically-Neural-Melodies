@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import PresetCard from "../components/PresetCard";
 import { api } from "../lib/api";
+import { FALLBACK_PRESETS } from "../lib/presetsFallback";
 import { ArrowRight, Check, Quote, Upload, Wand2, Download, Clock } from "lucide-react";
 
 const PRESET_DETAILS = [
@@ -145,14 +146,22 @@ const PRESET_DETAILS = [
 ];
 
 export default function Landing() {
-  const [presets, setPresets] = useState([]);
+  const [presets, setPresets] = useState(FALLBACK_PRESETS);
   const [plans, setPlans] = useState(null);
   const [billing, setBilling] = useState("yearly");
   const [sampleCredits, setSampleCredits] = useState(null);
 
   useEffect(() => {
-    api.get("/presets").then((r) => setPresets(r.data.presets)).catch(() => {});
-    api.get("/plans").then((r) => setPlans(r.data.plans)).catch(() => {});
+    api.get("/presets")
+      .then((r) => {
+        if (Array.isArray(r?.data?.presets) && r.data.presets.length > 0) {
+          setPresets(r.data.presets);
+        }
+      })
+      .catch((e) => {
+        console.warn("Preset fetch failed, using fallback:", e?.message || e);
+      });
+    api.get("/plans").then((r) => setPlans(r.data.plans)).catch((e) => console.warn("Plans fetch failed:", e));
     api.get("/presets/samples/credits").then((r) => setSampleCredits(r.data)).catch(() => {});
   }, []);
 

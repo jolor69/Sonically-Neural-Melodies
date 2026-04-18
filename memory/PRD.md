@@ -65,6 +65,11 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 7 — Preset resilience on deployed app (2026-02-18)
+- **Root cause**: `Landing.jsx` + `Workspace.jsx` initialized `presets` state as `[]` and relied entirely on `/api/presets` succeeding. Any network hiccup / CORS mismatch / cold-start 502 on the deployed app resulted in `presets=[]` → the "Signature presets" section rendered 0 cards.
+- **Fix**: Created `/app/frontend/src/lib/presetsFallback.js` with full display metadata for all 8 presets (universal, fire, clarity, tape, natural, spatial, cinematic, punch) mirroring `/app/backend/presets.py`. Both Landing and Workspace now initialize state to `FALLBACK_PRESETS`. The API call is still made; if it succeeds with a non-empty array, it overrides the fallback. Failures are logged to console.
+- **Verified** by intercepting `/api/presets` with Playwright and confirming all 8 preset cards render with correct colors, icons, LUFS badges, and sample mini-players.
+
 ## Iteration 6 — Code review fixes (2026-02-18)
 - **Backend critical fix**: `download_track()` initialized `out_bytes = b""` before the try/finally to eliminate the "possibly undefined" code path.
 - **Test credentials**: all hardcoded values in `/app/backend/tests/*.py` moved behind `os.environ.get(...)` with the prior values as fallbacks (TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD, TEST_DEMO_EMAIL, TEST_DEMO_PASSWORD, TEST_PAYPAL_EMAIL/PASSWORD). Added `/app/backend/tests/conftest.py` that loads .env + re-exports the constants.

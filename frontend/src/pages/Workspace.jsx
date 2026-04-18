@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import PresetCard from "../components/PresetCard";
 import Waveform from "../components/Waveform";
 import { api, streamUrl, downloadUrl } from "../lib/api";
+import { FALLBACK_PRESETS } from "../lib/presetsFallback";
 import { ArrowLeft, Download, Loader2, Play, Pause, Wand2, Lock, ChevronDown, Clock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
@@ -25,7 +26,7 @@ export default function Workspace() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [track, setTrack] = useState(null);
-  const [presets, setPresets] = useState([]);
+  const [presets, setPresets] = useState(FALLBACK_PRESETS);
   const [formats, setFormats] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [processing, setProcessing] = useState(false);
@@ -49,7 +50,13 @@ export default function Workspace() {
       setTrack(r.data);
       if (r.data.preset_id) setSelectedId(r.data.preset_id);
     }).catch(() => { toast.error("Track not found"); navigate("/dashboard"); });
-    api.get("/presets").then((r) => setPresets(r.data.presets)).catch(() => {});
+    api.get("/presets")
+      .then((r) => {
+        if (Array.isArray(r?.data?.presets) && r.data.presets.length > 0) {
+          setPresets(r.data.presets);
+        }
+      })
+      .catch((e) => console.warn("Preset fetch failed, using fallback:", e?.message || e));
     api.get("/plans").then((r) => setFormats(r.data.download_formats || [])).catch(() => {});
   }, [trackId, navigate]);
 
