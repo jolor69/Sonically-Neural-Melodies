@@ -94,9 +94,14 @@ export default function Workspace() {
       self.pause();
       setPlaying(null);
     } else {
-      self.currentTime = 0;
-      self.play().catch(() => {});
-      setPlaying(which);
+      try { self.currentTime = 0; } catch {}
+      self.play().then(() => {
+        setPlaying(which);
+      }).catch((err) => {
+        console.error("Audio play failed:", err);
+        toast.error("Couldn't play audio — please try again");
+        setPlaying(null);
+      });
     }
   };
 

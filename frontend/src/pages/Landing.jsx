@@ -429,7 +429,7 @@ export default function Landing() {
               "30 exports / month",
               "WAV 16/24-bit · MP3 320k · FLAC",
               "All 8 presets + Intensity & EQ controls",
-              "Unlimited track length",
+              "Save 25 custom presets",
             ]}
             cta="Upgrade to Pro"
             ctaTo="/login?mode=signup"

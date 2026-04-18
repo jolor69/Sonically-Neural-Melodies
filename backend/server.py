@@ -549,14 +549,31 @@ async def stream_track(
         raise HTTPException(status_code=404, detail="Track not found")
     if which == "original":
         path = track["storage_path_original"]
+        ext = track.get("ext", "wav")
     elif which == "mastered":
         path = track.get("storage_path_mastered")
         if not path:
             raise HTTPException(status_code=404, detail="Not mastered yet")
+        ext = "wav"
     else:
         raise HTTPException(status_code=400, detail="Invalid which")
-    data, content_type = get_object(path)
-    return StreamingResponse(BytesIO(data), media_type=content_type or "audio/wav")
+    data, _ = get_object(path)
+
+    # Infer proper audio MIME so <audio> element can decode
+    mime_map = {
+        "wav": "audio/wav", "mp3": "audio/mpeg", "flac": "audio/flac",
+        "m4a": "audio/mp4", "aac": "audio/aac", "ogg": "audio/ogg",
+    }
+    media_type = mime_map.get(ext.lower(), "audio/wav")
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={
+            "Content-Length": str(len(data)),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, max-age=300",
+        },
+    )
 
 
 @api.get("/tracks/{track_id}/download")
