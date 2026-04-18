@@ -198,7 +198,7 @@ export default function Landing() {
             tagline="Try it out, hobby sketches"
             price="$0"
             period=""
-            features={["5 exports / month", "WAV 16-bit", "All 8 presets", "LUFS normalize basic"]}
+            features={["5 exports / month", "MP3 128k preview only", "All 8 presets", "LUFS normalize basic"]}
             cta="Start Free"
             ctaTo="/login?mode=signup"
             testId="price-free"
@@ -211,7 +211,7 @@ export default function Landing() {
             billed={billing === "yearly" ? "Billed $44.99/yr" : "Billed monthly"}
             highlight
             badge="Popular"
-            features={["30 exports / month", "WAV 16/24-bit, MP3 320k, FLAC", "Target LUFS per platform", "Save 25 presets"]}
+            features={["30 exports / month", "WAV 16/24-bit · MP3 320k · FLAC", "Target LUFS per platform", "Save 25 presets"]}
             cta="Upgrade to Pro"
             ctaTo="/login?mode=signup"
             testId="price-pro"

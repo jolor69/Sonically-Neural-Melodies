@@ -65,7 +65,7 @@ export default function Pricing() {
             tagline="Try it out, hobby sketches"
             price="$0"
             period=""
-            features={["5 exports / month", "WAV 16-bit", "All 8 presets", "LUFS normalize basic"]}
+            features={["5 exports / month", "MP3 128k preview only", "All 8 presets", "LUFS normalize basic"]}
             ctaLabel={user?.subscription_tier === "free" ? "Current plan" : "Downgrade coming soon"}
             disabled
             testId="plan-free"
@@ -78,7 +78,7 @@ export default function Pricing() {
             billed={billing === "yearly" ? "Billed $44.99/yr" : "Billed monthly"}
             highlight
             badge="Popular"
-            features={["30 exports / month", "WAV 16/24-bit, MP3 320k, FLAC", "Target LUFS per platform", "Save 25 presets"]}
+            features={["30 exports / month", "WAV 16/24-bit · MP3 320k · FLAC", "Target LUFS per platform", "Save 25 presets"]}
             ctaLabel={user?.subscription_tier === "pro" ? "Current plan" : (busyPlan === "pro" ? "Redirecting…" : "Upgrade to Pro")}
             onCta={() => checkout("pro")}
             disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}

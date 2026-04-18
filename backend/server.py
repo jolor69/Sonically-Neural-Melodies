@@ -94,12 +94,19 @@ ALLOWED_EXT = {"wav", "mp3", "flac", "m4a", "aac", "ogg"}
 # Tier ranking: free=0, pro=1, studio=2
 TIER_RANK = {"free": 0, "pro": 1, "studio": 2}
 DOWNLOAD_FORMATS = {
+    "mp3_128": {
+        "label": "MP3 128 kbps · Preview",
+        "ext": "mp3",
+        "mime": "audio/mpeg",
+        "ffmpeg_args": ["-acodec", "libmp3lame", "-b:a", "128k", "-ar", "44100"],
+        "tier": "free",
+    },
     "wav16": {
         "label": "WAV 16-bit · 44.1kHz",
         "ext": "wav",
         "mime": "audio/wav",
         "ffmpeg_args": ["-acodec", "pcm_s16le", "-ar", "44100"],
-        "tier": "free",
+        "tier": "pro",
     },
     "mp3": {
         "label": "MP3 320 kbps",
