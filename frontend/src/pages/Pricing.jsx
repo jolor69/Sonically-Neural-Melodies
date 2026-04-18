@@ -65,7 +65,12 @@ export default function Pricing() {
             tagline="Try it out, hobby sketches"
             price="$0"
             period=""
-            features={["5 exports / month", "MP3 128k preview only", "All 8 presets", "LUFS normalize basic"]}
+            features={[
+              "3 exports / month",
+              "WAV 16-bit",
+              "4 presets: Universal · Fire · Clarity · Tape",
+              "Tracks up to 2 minutes",
+            ]}
             ctaLabel={user?.subscription_tier === "free" ? "Current plan" : "Downgrade coming soon"}
             disabled
             testId="plan-free"
@@ -78,7 +83,12 @@ export default function Pricing() {
             billed={billing === "yearly" ? "Billed $44.99/yr" : "Billed monthly"}
             highlight
             badge="Popular"
-            features={["30 exports / month", "WAV 16/24-bit · MP3 320k · FLAC", "Target LUFS per platform", "Save 25 presets"]}
+            features={[
+              "30 exports / month",
+              "WAV 16/24-bit · MP3 320k · FLAC",
+              "All 8 presets + Intensity & EQ",
+              "Unlimited track length",
+            ]}
             ctaLabel={user?.subscription_tier === "pro" ? "Current plan" : (busyPlan === "pro" ? "Redirecting…" : "Upgrade to Pro")}
             onCta={() => checkout("pro")}
             disabled={user?.subscription_tier === "pro" || busyPlan === "pro"}
@@ -91,13 +101,22 @@ export default function Pricing() {
             price={billing === "yearly" ? "$9.99" : "$12.99"}
             period="/ month"
             billed={billing === "yearly" ? "Billed $119.99/yr" : "Billed monthly"}
-            features={["Unlimited exports", "Hi-res 24/96 & 24/192", "Unlimited presets", "Priority support"]}
+            features={[
+              "Unlimited exports",
+              "Hi-res 24/96 & 24/192",
+              "All 8 presets + full controls",
+              "Priority processing queue",
+            ]}
             ctaLabel={user?.subscription_tier === "studio" ? "Current plan" : (busyPlan === "studio" ? "Redirecting…" : "Upgrade to Studio")}
             onCta={() => checkout("studio")}
             disabled={user?.subscription_tier === "studio" || busyPlan === "studio"}
             loading={busyPlan === "studio"}
             testId="plan-studio"
           />
+        </div>
+
+        <div className="mt-8 text-center text-xs text-[#6B7280] label-overline" data-testid="wait-time-pricing-notice">
+          Note · All tiers may take up to 20 minutes per master
         </div>
 
         <div className="mt-12 text-center bg-[#121216] border border-[#2A2A35] rounded-xl p-6 max-w-3xl mx-auto flex items-center gap-3 justify-center text-sm text-[#9CA3AF]">

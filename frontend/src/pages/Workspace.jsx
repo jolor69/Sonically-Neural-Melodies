@@ -4,7 +4,7 @@ import Navbar from "../components/Navbar";
 import PresetCard from "../components/PresetCard";
 import Waveform from "../components/Waveform";
 import { api, streamUrl, downloadUrl } from "../lib/api";
-import { ArrowLeft, Download, Loader2, Play, Pause, Wand2, Lock, ChevronDown } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Play, Pause, Wand2, Lock, ChevronDown, Clock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -15,6 +15,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
+import { Slider } from "../components/ui/slider";
+
+const TIER_RANK = { free: 0, pro: 1, studio: 2 };
+const FREE_PRESETS = ["universal", "fire", "clarity", "tape"];
 
 export default function Workspace() {
   const { trackId } = useParams();
@@ -25,9 +29,19 @@ export default function Workspace() {
   const [formats, setFormats] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [processing, setProcessing] = useState(false);
-  const [playing, setPlaying] = useState(null); // "original" | "mastered" | null
+  const [playing, setPlaying] = useState(null);
+  const [intensity, setIntensity] = useState(1.0);
+  const [inputGain, setInputGain] = useState(0);
+  const [eqLow, setEqLow] = useState(0);
+  const [eqMid, setEqMid] = useState(0);
+  const [eqHigh, setEqHigh] = useState(0);
   const origAudio = useRef(null);
   const masterAudio = useRef(null);
+
+  const userTier = user?.subscription_tier || "free";
+  const userTierRank = TIER_RANK[userTier] ?? 0;
+  const isFree = userTier === "free";
+  const advUnlocked = !isFree;
 
   useEffect(() => {
     api.get(`/tracks/${trackId}`).then((r) => {
@@ -38,14 +52,26 @@ export default function Workspace() {
     api.get("/plans").then((r) => setFormats(r.data.download_formats || [])).catch(() => {});
   }, [trackId, navigate]);
 
+  const presetLocked = (id) => isFree && !FREE_PRESETS.includes(id);
+
   const process = async () => {
     if (!selectedId) { toast.error("Pick a preset first"); return; }
+    if (presetLocked(selectedId)) {
+      toast.error("This preset requires Pro tier");
+      navigate("/pricing");
+      return;
+    }
     setProcessing(true);
     try {
-      const r = await api.post("/tracks/process", {
-        track_id: trackId,
-        preset_id: selectedId,
-      });
+      const payload = { track_id: trackId, preset_id: selectedId };
+      if (advUnlocked) {
+        payload.intensity = intensity;
+        payload.input_gain = inputGain;
+        payload.eq_low = eqLow;
+        payload.eq_mid = eqMid;
+        payload.eq_high = eqHigh;
+      }
+      const r = await api.post("/tracks/process", payload);
       setTrack(r.data);
       toast.success("Mastered — hit play to compare");
     } catch (e) {
@@ -73,9 +99,6 @@ export default function Workspace() {
       setPlaying(which);
     }
   };
-
-  const TIER_RANK = { free: 0, pro: 1, studio: 2 };
-  const userTierRank = TIER_RANK[user?.subscription_tier || "free"] ?? 0;
 
   const download = (formatId) => {
     if (!track?.status || track.status !== "mastered") return;
@@ -181,6 +204,12 @@ export default function Workspace() {
           </div>
         </div>
 
+        {/* 20-min wait notice */}
+        <div className="bg-[#121216] border border-[#2A2A35] rounded-xl px-4 py-3 mb-8 flex items-center gap-3 text-sm text-[#9CA3AF]" data-testid="wait-time-notice">
+          <Clock size={16} className="text-[#E28C22] shrink-0" />
+          <span>Heads up: mastering can take up to <span className="text-white font-semibold">20 minutes</span> per track on all tiers.</span>
+        </div>
+
         {/* A/B preview */}
         <section className="grid md:grid-cols-2 gap-6 mb-12">
           <ABCard
@@ -210,14 +239,99 @@ export default function Workspace() {
           />
         </section>
 
+        {/* Advanced controls: Intensity + EQ (Pro+) */}
+        <section className="mb-12 relative" data-testid="advanced-controls-section">
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Intensity */}
+            <div className={`bg-[#121216] border border-[#2A2A35] rounded-xl p-6 relative ${!advUnlocked ? "opacity-80" : ""}`} data-testid="intensity-panel">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-lg font-bold" style={{ fontFamily: "Outfit" }}>Intensity</div>
+                  <div className="label-overline mt-1">How hard the preset hits</div>
+                </div>
+                {!advUnlocked && <LockBadge />}
+              </div>
+              <div className="px-1 pt-4 pb-2">
+                <Slider
+                  value={[intensity]}
+                  onValueChange={(v) => advUnlocked && setIntensity(v[0])}
+                  min={0.5}
+                  max={1.5}
+                  step={0.05}
+                  disabled={!advUnlocked}
+                  data-testid="intensity-slider"
+                />
+                <div className="flex justify-between mt-3 label-overline text-[10px]">
+                  <span>Light</span>
+                  <span className={advUnlocked ? "text-[#E28C22]" : "text-[#6B7280]"} data-testid="intensity-value">
+                    {intensity.toFixed(2)}×
+                  </span>
+                  <span>Heavy</span>
+                </div>
+              </div>
+              <div className="mt-4 border-t border-[#2A2A35] pt-4">
+                <div className="label-overline mb-2">Input gain</div>
+                <Slider
+                  value={[inputGain]}
+                  onValueChange={(v) => advUnlocked && setInputGain(v[0])}
+                  min={-12}
+                  max={12}
+                  step={0.5}
+                  disabled={!advUnlocked}
+                  data-testid="input-gain-slider"
+                />
+                <div className="flex justify-between mt-2 label-overline text-[10px]">
+                  <span>-12 dB</span>
+                  <span className={advUnlocked ? "text-[#E28C22]" : "text-[#6B7280]"}>{inputGain > 0 ? "+" : ""}{inputGain.toFixed(1)} dB</span>
+                  <span>+12 dB</span>
+                </div>
+              </div>
+              {!advUnlocked && (
+                <UpgradeOverlay onClick={() => navigate("/pricing")} text="Unlock Intensity + Input Gain with Pro" />
+              )}
+            </div>
+
+            {/* EQ */}
+            <div className={`bg-[#121216] border border-[#2A2A35] rounded-xl p-6 relative ${!advUnlocked ? "opacity-80" : ""}`} data-testid="eq-panel">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold" style={{ fontFamily: "Outfit" }}>EQ</div>
+                  <span className="label-overline text-[9px] bg-[#E28C22]/15 text-[#E28C22] px-2 py-0.5 rounded">Beta</span>
+                </div>
+                {!advUnlocked && <LockBadge />}
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: "Low", freq: "100 Hz", val: eqLow, set: setEqLow, id: "low" },
+                  { label: "Mid", freq: "1 kHz", val: eqMid, set: setEqMid, id: "mid" },
+                  { label: "High", freq: "8 kHz", val: eqHigh, set: setEqHigh, id: "high" },
+                ].map((band) => (
+                  <EQKnob key={band.id} {...band} disabled={!advUnlocked} />
+                ))}
+              </div>
+              {!advUnlocked && (
+                <UpgradeOverlay onClick={() => navigate("/pricing")} text="Unlock EQ with Pro" />
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Preset picker */}
         <section>
           <div className="flex items-end justify-between mb-6">
             <div>
               <div className="label-overline mb-2">/ Pick a preset</div>
               <h2 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "Outfit" }}>
-                Eight signature sounds.
+                {isFree ? "Four signature sounds." : "Eight signature sounds."}
               </h2>
+              {isFree && (
+                <div className="text-sm text-[#9CA3AF] mt-1" data-testid="free-preset-notice">
+                  Free tier: Universal, Fire, Clarity, Tape.
+                  <button onClick={() => navigate("/pricing")} className="ml-2 text-[#E28C22] hover:underline">
+                    Unlock all 8 →
+                  </button>
+                </div>
+              )}
             </div>
             {selected && (
               <div className="label-overline" style={{ color: selected.color }} data-testid="active-preset-label">
@@ -226,19 +340,109 @@ export default function Workspace() {
             )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {presets.map((p) => (
-              <PresetCard
-                key={p.id}
-                preset={p}
-                selected={p.id === selectedId}
-                onClick={() => setSelectedId(p.id)}
-                compact
-                testId={`workspace-preset-${p.id}`}
-              />
-            ))}
+            {presets.map((p) => {
+              const locked = presetLocked(p.id);
+              return (
+                <div key={p.id} className="relative">
+                  <PresetCard
+                    preset={p}
+                    selected={p.id === selectedId}
+                    onClick={() => {
+                      if (locked) {
+                        toast.error(`${p.name} requires Pro tier`);
+                        navigate("/pricing");
+                        return;
+                      }
+                      setSelectedId(p.id);
+                    }}
+                    compact
+                    testId={`workspace-preset-${p.id}`}
+                  />
+                  {locked && (
+                    <div className="absolute inset-0 rounded-xl bg-[#0A0A0C]/70 flex items-center justify-center pointer-events-none" data-testid={`preset-lock-${p.id}`}>
+                      <div className="flex flex-col items-center gap-2 label-overline text-[#E28C22]">
+                        <Lock size={22} />
+                        <span>PRO</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       </main>
+    </div>
+  );
+}
+
+function LockBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 label-overline text-[10px] text-[#E28C22] bg-[#E28C22]/10 px-2 py-1 rounded">
+      <Lock size={11} /> Pro
+    </span>
+  );
+}
+
+function UpgradeOverlay({ onClick, text }) {
+  return (
+    <button
+      onClick={onClick}
+      className="absolute inset-0 rounded-xl flex items-center justify-center bg-[#0A0A0C]/60 backdrop-blur-[1px] hover:bg-[#0A0A0C]/40 transition"
+      data-testid="upgrade-overlay"
+    >
+      <div className="flex items-center gap-2 border border-[#E28C22] bg-[#121216] px-4 py-2 rounded-full">
+        <Sparkles size={14} className="text-[#E28C22]" />
+        <span className="text-sm font-semibold">{text}</span>
+      </div>
+    </button>
+  );
+}
+
+function EQKnob({ label, freq, val, set, disabled, id }) {
+  // Visual rotary knob using a conic gradient; clicking steps through values.
+  const pct = (val + 6) / 12; // 0..1
+  const rotation = -135 + pct * 270; // -135° to 135°
+  return (
+    <div className="flex flex-col items-center gap-2" data-testid={`eq-knob-${id}`}>
+      <div
+        className="relative w-20 h-20 rounded-full flex items-center justify-center select-none"
+        style={{
+          background: disabled
+            ? "radial-gradient(circle at 30% 30%, #2A2A35, #121216)"
+            : "radial-gradient(circle at 30% 30%, #3A3A45, #14141A)",
+          boxShadow: disabled ? "none" : "inset 0 2px 4px rgba(0,0,0,0.5), 0 0 12px rgba(226,140,34,0.15)",
+        }}
+      >
+        <div
+          className="absolute w-1 h-7 rounded-full"
+          style={{
+            top: 6,
+            background: disabled ? "#4B5563" : "#E28C22",
+            transform: `rotate(${rotation}deg)`,
+            transformOrigin: "bottom center",
+            transition: "transform 0.2s",
+          }}
+        />
+      </div>
+      <input
+        type="range"
+        min={-6}
+        max={6}
+        step={0.5}
+        value={val}
+        onChange={(e) => !disabled && set(parseFloat(e.target.value))}
+        disabled={disabled}
+        className="w-full accent-[#E28C22]"
+        data-testid={`eq-input-${id}`}
+      />
+      <div className="flex flex-col items-center leading-tight">
+        <span className="label-overline text-[10px]">{label}</span>
+        <span className="mono text-xs text-[#6B7280]">{freq}</span>
+        <span className={`mono text-xs ${disabled ? "text-[#6B7280]" : "text-[#E28C22]"}`}>
+          {val > 0 ? "+" : ""}{val.toFixed(1)} dB
+        </span>
+      </div>
     </div>
   );
 }

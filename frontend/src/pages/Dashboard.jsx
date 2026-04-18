@@ -108,9 +108,13 @@ export default function Dashboard() {
               <div className="text-xl font-semibold" style={{ fontFamily: "Outfit" }}>
                 Drop an audio file or click to browse
               </div>
-              <div className="text-sm text-[#9CA3AF]">WAV, MP3, FLAC, M4A · up to {user?.subscription_tier === "studio" ? "200" : user?.subscription_tier === "pro" ? "100" : "50"}MB</div>
+              <div className="text-sm text-[#9CA3AF]">WAV, MP3, FLAC, M4A · up to {user?.subscription_tier === "studio" ? "200" : user?.subscription_tier === "pro" ? "100" : "50"}MB{user?.subscription_tier === "free" ? " · max 2 min" : ""}</div>
             </div>
           )}
+        </div>
+
+        <div className="mt-4 flex items-center gap-2 text-xs text-[#6B7280] label-overline" data-testid="dashboard-wait-notice">
+          ⏱ Mastering can take up to 20 minutes per track on all tiers.
         </div>
 
         {/* Recent tracks */}

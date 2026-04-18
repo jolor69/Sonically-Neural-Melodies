@@ -3,7 +3,146 @@ import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import PresetCard from "../components/PresetCard";
 import { api } from "../lib/api";
-import { ArrowRight, Check, Quote, Upload, Wand2, Download } from "lucide-react";
+import { ArrowRight, Check, Quote, Upload, Wand2, Download, Clock } from "lucide-react";
+
+const PRESET_DETAILS = [
+  {
+    id: "universal",
+    name: "Universal",
+    color: "#3B82F6",
+    genres: ["Rock", "Pop", "Electronic"],
+    lufs: "-14 LUFS",
+    headline: "The safe-bet master. Natural tonal balance that translates everywhere — earbuds, car, club.",
+    chain: [
+      "Subtle low-shelf lift at 80 Hz · +1.5 dB for gentle warmth",
+      "Presence bump at 3 kHz · +1.2 dB for vocal clarity",
+      "Air band at 10 kHz · +1.5 dB for streaming sheen",
+      "Glue compressor · 3:1 ratio, slow attack, moderate release",
+      "Loudness normalize to -14 LUFS (Spotify / YouTube standard)",
+    ],
+    best_for: "Any genre you're unsure about. Great for demos.",
+    img: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "fire",
+    name: "Fire",
+    color: "#EF4444",
+    genres: ["Trap", "Experimental", "Reggaeton"],
+    lufs: "-9 LUFS",
+    headline: "Club-loud. Punchy 60 Hz thump with a scooped low-mid and crisp top for club PA systems.",
+    chain: [
+      "Sub-bass boost at 60 Hz · +3.5 dB",
+      "Low-mid scoop at 200 Hz · -1.5 dB to clean mud",
+      "Presence lift at 2.5 kHz · +2 dB for rap attack",
+      "Aggressive compressor · 4:1, 8 ms attack",
+      "Normalize to -9 LUFS (hit the limiter like a trap master)",
+    ],
+    best_for: "Trap, drill, reggaeton, anything that needs to slap.",
+    img: "https://images.unsplash.com/photo-1571266028243-d220bc562db8?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "clarity",
+    name: "Clarity",
+    color: "#06B6D4",
+    genres: ["Classical", "R&B", "Singer-songwriter"],
+    lufs: "-16 LUFS",
+    headline: "Transparent. Low compression, airy highs, extended dynamic range for nuanced performances.",
+    chain: [
+      "Gentle 120 Hz low-cut · -1 dB to avoid muddiness",
+      "Upper-mid lift at 4 kHz · +2 dB for vocal breath",
+      "Air band at 12 kHz · +3 dB for shimmer",
+      "Light expander · 2:1, 30 ms attack, preserves dynamics",
+      "Normalize to -16 LUFS (Apple Music target)",
+    ],
+    best_for: "Classical, piano ballads, jazz vocals, intimate recordings.",
+    img: "https://images.unsplash.com/photo-1507838153414-b4b713384a76?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "tape",
+    name: "Tape",
+    color: "#F59E0B",
+    genres: ["Jazz", "Alternative", "Indie", "Rock"],
+    lufs: "-13 LUFS",
+    headline: "Warm analog feel. Subtle harmonic saturation with gentle top-end roll-off for a vintage vibe.",
+    chain: [
+      "Warm low-shelf at 100 Hz · +2 dB",
+      "Gentle top roll-off at 8 kHz · -1.5 dB (tape ceiling)",
+      "Analog compressor · 2.5:1, 40 ms attack",
+      "Subtle tape echo · 40 ms delay, 20% feedback",
+      "Normalize to -13 LUFS for vinyl-master feel",
+    ],
+    best_for: "Indie rock, lo-fi, anything vintage or analog-leaning.",
+    img: "https://images.unsplash.com/photo-1619983081563-430f63602796?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "natural",
+    name: "Natural",
+    color: "#10B981",
+    genres: ["Acoustic", "Jazz", "Singer-songwriter"],
+    lufs: "-16 LUFS",
+    headline: "Minimal-touch. Light compression and barely-there EQ that keeps the performance front and centre.",
+    chain: [
+      "Gentle low lift at 200 Hz · +0.8 dB for body",
+      "Presence at 5 kHz · +0.8 dB",
+      "Soft compressor · 1.8:1, very slow attack",
+      "Normalize to -16 LUFS with 12 LRA (wide dynamics)",
+    ],
+    best_for: "Acoustic, unplugged, small-room recordings.",
+    img: "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "spatial",
+    name: "Spatial",
+    color: "#8B5CF6",
+    genres: ["Ambient", "Experimental", "Electronic"],
+    lufs: "-14 LUFS",
+    headline: "Wide & atmospheric. Enhanced stereo field and subtle reverb tail for immersive headphone listening.",
+    chain: [
+      "Presence air at 5 kHz · +1.5 dB",
+      "Stereo widener · 160% — expands the soundstage",
+      "Atmospheric reverb · 60-80 ms early reflections",
+      "Slow glue compressor · 2:1",
+      "Normalize to -14 LUFS",
+    ],
+    best_for: "Ambient, downtempo, chillwave, film scoring.",
+    img: "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "cinematic",
+    name: "Cinematic",
+    color: "#EAB308",
+    genres: ["Soundtrack", "Orchestral", "Classical"],
+    lufs: "-12 LUFS",
+    headline: "Epic & dramatic. Scooped mids, deep lows, bright highs — the sonic signature of modern film trailers.",
+    chain: [
+      "Sub-lift at 60 Hz · +2.5 dB for impact",
+      "Mid scoop at 400 Hz · -2 dB for clarity",
+      "Brightness at 8 kHz · +1.5 dB",
+      "Aggressive compressor · 3.5:1, fast attack",
+      "Normalize to -12 LUFS (trailer-ready)",
+    ],
+    best_for: "Film scores, trailer music, game soundtracks, orchestral.",
+    img: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&q=80&w=1200",
+  },
+  {
+    id: "punch",
+    name: "Punch",
+    color: "#EC4899",
+    genres: ["Hip Hop", "Trap", "R&B"],
+    lufs: "-10 LUFS",
+    headline: "Energetic & bouncy. Deep 50 Hz kick, controlled low-mids, boosted air band — modern hip-hop energy.",
+    chain: [
+      "Deep kick at 50 Hz · +4 dB",
+      "Low-mid control at 250 Hz · -2 dB",
+      "Vocal presence at 3 kHz · +1.5 dB",
+      "Air at 10 kHz · +2.5 dB",
+      "Punch compressor · 4.5:1, 6 ms attack",
+      "Normalize to -10 LUFS (streaming-ready)",
+    ],
+    best_for: "Hip-hop, R&B, modern pop with heavy low-end.",
+    img: "https://images.unsplash.com/photo-1598550476439-6847785fcea6?auto=format&fit=crop&q=80&w=1200",
+  },
+];
 
 export default function Landing() {
   const [presets, setPresets] = useState([]);
@@ -123,6 +262,76 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* PRESET DETAIL — what each preset does */}
+      <section className="max-w-7xl mx-auto px-6 md:px-10 py-16 md:py-24">
+        <div className="label-overline mb-4">/ Under the hood</div>
+        <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 max-w-3xl" style={{ fontFamily: "Outfit" }}>
+          What each preset actually does.
+        </h2>
+        <p className="text-[#9CA3AF] max-w-2xl mb-14">
+          No black boxes. Here's the chain of EQ bands, compression, and loudness targeting behind every signature sound.
+        </p>
+        <div className="space-y-6">
+          {PRESET_DETAILS.map((d, i) => (
+            <div
+              key={d.id}
+              className="grid md:grid-cols-[380px_1fr] gap-0 bg-[#121216] border border-[#2A2A35] rounded-2xl overflow-hidden hover:border-[#E28C22]/40 transition group"
+              data-testid={`preset-detail-${d.id}`}
+            >
+              <div
+                className="relative h-64 md:h-auto min-h-[220px] overflow-hidden"
+                style={{ background: `linear-gradient(135deg, ${d.color}33, ${d.color}08)` }}
+              >
+                <img
+                  src={d.img}
+                  alt={d.name}
+                  className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-75 transition-opacity duration-500 grayscale-[30%]"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${d.color}66, transparent 60%, #0A0A0C)` }} />
+                <div className="relative h-full flex flex-col justify-between p-6">
+                  <div className="flex flex-wrap gap-1">
+                    {d.genres.map((g) => (
+                      <span
+                        key={g}
+                        className="label-overline text-[10px] px-2 py-1 rounded border"
+                        style={{ color: d.color, borderColor: `${d.color}66` }}
+                      >
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="text-3xl md:text-4xl font-black tracking-tight" style={{ fontFamily: "Outfit", color: "#fff" }}>
+                      {d.name}
+                    </div>
+                    <div className="mono text-xs mt-1" style={{ color: d.color }}>
+                      LUFS target · {d.lufs}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 md:p-8 flex flex-col justify-center">
+                <div className="text-lg text-[#F4F4F5] leading-relaxed mb-5">{d.headline}</div>
+                <ul className="space-y-2 text-sm text-[#9CA3AF]">
+                  {d.chain.map((c, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="mono text-[11px] mt-[3px]" style={{ color: d.color }}>
+                        {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-5 label-overline text-[10px]" style={{ color: d.color }}>
+                  Best for · {d.best_for}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ENGINEERS */}
       <section id="engineers" className="relative max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-28">
         <div className="label-overline mb-4">/ Engineered With The Best</div>
@@ -198,7 +407,12 @@ export default function Landing() {
             tagline="Try it out, hobby sketches"
             price="$0"
             period=""
-            features={["5 exports / month", "MP3 128k preview only", "All 8 presets", "LUFS normalize basic"]}
+            features={[
+              "3 exports / month",
+              "WAV 16-bit",
+              "4 presets: Universal · Fire · Clarity · Tape",
+              "Tracks up to 2 minutes",
+            ]}
             cta="Start Free"
             ctaTo="/login?mode=signup"
             testId="price-free"
@@ -211,7 +425,12 @@ export default function Landing() {
             billed={billing === "yearly" ? "Billed $44.99/yr" : "Billed monthly"}
             highlight
             badge="Popular"
-            features={["30 exports / month", "WAV 16/24-bit · MP3 320k · FLAC", "Target LUFS per platform", "Save 25 presets"]}
+            features={[
+              "30 exports / month",
+              "WAV 16/24-bit · MP3 320k · FLAC",
+              "All 8 presets + Intensity & EQ controls",
+              "Unlimited track length",
+            ]}
             cta="Upgrade to Pro"
             ctaTo="/login?mode=signup"
             testId="price-pro"
@@ -222,11 +441,20 @@ export default function Landing() {
             price={billing === "yearly" ? "$9.99" : "$12.99"}
             period="/ month"
             billed={billing === "yearly" ? "Billed $119.99/yr" : "Billed monthly"}
-            features={["Unlimited exports", "Hi-res 24/96 & 24/192", "Unlimited presets", "Priority support"]}
+            features={[
+              "Unlimited exports",
+              "Hi-res 24/96 & 24/192",
+              "All 8 presets + full controls",
+              "Priority processing queue",
+            ]}
             cta="Upgrade to Studio"
             ctaTo="/login?mode=signup"
             testId="price-studio"
           />
+        </div>
+
+        <div className="mt-8 text-center text-xs text-[#6B7280] label-overline" data-testid="wait-time-notice-landing">
+          Note · All tiers may take up to 20 minutes per master
         </div>
       </section>
 

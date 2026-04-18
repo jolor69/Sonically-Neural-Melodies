@@ -68,6 +68,11 @@ class CheckoutRequest(BaseModel):
 class ProcessRequest(BaseModel):
     track_id: str
     preset_id: str
+    intensity: Optional[float] = None  # 0.5 - 1.5 (Light..Heavy)
+    eq_low: Optional[float] = None  # dB, -6 .. +6
+    eq_mid: Optional[float] = None
+    eq_high: Optional[float] = None
+    input_gain: Optional[float] = None  # dB, -12 .. +12
 
 
 # ---------------- PRICING ----------------
@@ -83,9 +88,27 @@ PLANS = {
 }
 
 TIER_LIMITS = {
-    "free": {"max_tracks_per_month": 5, "max_file_mb": 50},
-    "pro": {"max_tracks_per_month": 30, "max_file_mb": 100},
-    "studio": {"max_tracks_per_month": 10000, "max_file_mb": 200},
+    "free": {
+        "max_tracks_per_month": 3,
+        "max_file_mb": 50,
+        "max_duration_sec": 120,
+        "advanced_controls": False,
+        "allowed_presets": ["universal", "fire", "clarity", "tape"],
+    },
+    "pro": {
+        "max_tracks_per_month": 30,
+        "max_file_mb": 100,
+        "max_duration_sec": None,
+        "advanced_controls": True,
+        "allowed_presets": None,  # all
+    },
+    "studio": {
+        "max_tracks_per_month": 10000,
+        "max_file_mb": 200,
+        "max_duration_sec": None,
+        "advanced_controls": True,
+        "allowed_presets": None,
+    },
 }
 
 ALLOWED_EXT = {"wav", "mp3", "flac", "m4a", "aac", "ogg"}
@@ -94,19 +117,12 @@ ALLOWED_EXT = {"wav", "mp3", "flac", "m4a", "aac", "ogg"}
 # Tier ranking: free=0, pro=1, studio=2
 TIER_RANK = {"free": 0, "pro": 1, "studio": 2}
 DOWNLOAD_FORMATS = {
-    "mp3_128": {
-        "label": "MP3 128 kbps · Preview",
-        "ext": "mp3",
-        "mime": "audio/mpeg",
-        "ffmpeg_args": ["-acodec", "libmp3lame", "-b:a", "128k", "-ar", "44100"],
-        "tier": "free",
-    },
     "wav16": {
         "label": "WAV 16-bit · 44.1kHz",
         "ext": "wav",
         "mime": "audio/wav",
         "ffmpeg_args": ["-acodec", "pcm_s16le", "-ar", "44100"],
-        "tier": "pro",
+        "tier": "free",
     },
     "mp3": {
         "label": "MP3 320 kbps",
@@ -352,15 +368,21 @@ async def upload_track(
     data = await file.read()
     size_mb = len(data) / (1024 * 1024)
     tier = user.get("subscription_tier", "free")
-    limit_mb = TIER_LIMITS[tier]["max_file_mb"]
-    if size_mb > limit_mb:
-        raise HTTPException(status_code=400, detail=f"File exceeds {limit_mb}MB for {tier} tier")
+    limits = TIER_LIMITS[tier]
+    if size_mb > limits["max_file_mb"]:
+        raise HTTPException(status_code=400, detail=f"File exceeds {limits['max_file_mb']}MB for {tier} tier")
 
     track_id = f"trk_{uuid.uuid4().hex[:12]}"
     storage_filename = f"{track_id}.{ext}"
     storage_path = build_path("originals", user["user_id"], storage_filename)
-    put_object(storage_path, data, file.content_type or "audio/wav")
     duration = probe_duration(data, ext)
+    max_dur = limits.get("max_duration_sec")
+    if max_dur is not None and duration > max_dur:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Track length {int(duration)}s exceeds {tier} tier limit of {int(max_dur/60)} min. Upgrade for longer tracks.",
+        )
+    put_object(storage_path, data, file.content_type or "audio/wav")
     peaks = waveform_peaks(data, ext)
 
     doc = {
@@ -423,7 +445,8 @@ async def process_track(
     user = await resolve_user(db, authorization, session_token)
     # Monthly quota check
     tier = user.get("subscription_tier", "free")
-    quota = TIER_LIMITS[tier]["max_tracks_per_month"]
+    limits = TIER_LIMITS[tier]
+    quota = limits["max_tracks_per_month"]
     month_start = utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     count = await db.tracks.count_documents({
         "user_id": user["user_id"],
@@ -443,8 +466,50 @@ async def process_track(
     if not preset:
         raise HTTPException(status_code=400, detail="Unknown preset")
 
+    # Tier: preset allowlist check
+    allowed = limits.get("allowed_presets")
+    if allowed is not None and body.preset_id not in allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=f"'{preset['name']}' preset requires Pro tier. Upgrade to unlock all presets.",
+        )
+
+    # Tier: advanced controls (intensity / EQ / input_gain) gated behind Pro+
+    adv = limits.get("advanced_controls", False)
+    has_custom = any(v is not None for v in (body.intensity, body.eq_low, body.eq_mid, body.eq_high, body.input_gain))
+    if has_custom and not adv:
+        raise HTTPException(
+            status_code=402,
+            detail="Intensity & EQ controls require Pro tier. Upgrade to unlock.",
+        )
+
+    # Build filter chain
+    chain_parts = []
+    if adv and body.input_gain is not None:
+        g = max(-12.0, min(12.0, float(body.input_gain)))
+        chain_parts.append(f"volume={g}dB")
+    chain_parts.append(preset["filter"])
+    if adv:
+        low = body.eq_low or 0
+        mid = body.eq_mid or 0
+        high = body.eq_high or 0
+        if any(abs(x) > 0.01 for x in (low, mid, high)):
+            low = max(-6.0, min(6.0, float(low)))
+            mid = max(-6.0, min(6.0, float(mid)))
+            high = max(-6.0, min(6.0, float(high)))
+            chain_parts.append(f"equalizer=f=100:t=q:w=1:g={low}")
+            chain_parts.append(f"equalizer=f=1000:t=q:w=1:g={mid}")
+            chain_parts.append(f"equalizer=f=8000:t=q:w=1:g={high}")
+        if body.intensity is not None:
+            # intensity 0.5 => -3dB, 1.0 => 0dB, 1.5 => +3dB (final makeup trim)
+            intensity = max(0.5, min(1.5, float(body.intensity)))
+            db_adjust = (intensity - 1.0) * 6.0
+            if abs(db_adjust) > 0.05:
+                chain_parts.append(f"volume={db_adjust}dB")
+    filter_chain = ",".join(chain_parts)
+
     original_bytes, _ = get_object(track["storage_path_original"])
-    mastered_bytes = apply_preset(original_bytes, track["ext"], preset["filter"], "wav")
+    mastered_bytes = apply_preset(original_bytes, track["ext"], filter_chain, "wav")
     peaks_mastered = waveform_peaks(mastered_bytes, "wav")
 
     mastered_filename = f"{track['track_id']}_{preset['id']}.wav"
