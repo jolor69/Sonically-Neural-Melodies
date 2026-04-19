@@ -84,3 +84,12 @@ android-sdk/
 # The deploy pipeline rewrites MONGO_URL / REACT_APP_BACKEND_URL / etc. at build time.
 # Real secrets (Stripe/PayPal/Resend keys) are set via deployment environment variables,
 # not committed to the repo.
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
