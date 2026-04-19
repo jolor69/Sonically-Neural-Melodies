@@ -65,7 +65,29 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
-## Iteration 14 — Peak LED meter (2026-02-18)
+## Iteration 15 — Admin User Activity Logs (2026-04-19)
+- **New feature**: Admin-only activity log viewer at `/admin` (section below the email-receipt test). Captures every upload, master, and download across all users for audit / preset-accuracy review.
+- **Backend** (`server.py`):
+  - New helper `log_activity(user, event_type, **extra)` writes to `db.activity_logs` — fire-and-forget, never raises to the caller.
+  - Instrumented `/api/tracks/upload` (logs file_ext, file_size_mb, duration_sec, auto_input_gain_db), `/api/tracks/process` (logs preset_id/name, preset_target_lufs, params{intensity,eq_low,eq_mid,eq_high,input_gain}, measured_lufs, measured_true_peak_db, measured_lra, lufs_delta), and `/api/tracks/{id}/download` (logs download_format, label, ext, file_size_mb + cached mastered LUFS for target vs actual comparison).
+  - `process_track` now also caches `mastered_lufs_integrated`, `mastered_true_peak_db`, `mastered_lra` on the track doc (so download logs reuse the one-time measurement and stay fast).
+  - New endpoint `GET /api/admin/activity?event_type=&user_email=&since=&until=&limit=&offset=` — admin-only (403 for non-admin), sorted newest first, returns `{items, total, offset, limit, summary:{upload,process,download}}`.
+  - Indexes added on `activity_logs.timestamp`, `(event_type,timestamp)`, `(user_email,timestamp)`.
+- **Audio engine** (`audio_engine.py`): new `measure_loudness(bytes, ext)` wraps ffmpeg's `ebur128=peak=true` filter and parses the summary block for integrated LUFS, threshold, LRA, and true peak (all floats or None on failure).
+- **Frontend** (`/app/frontend/src/components/AdminActivityLogs.jsx`, wired into `Admin.jsx`):
+  - Filterable/paginated table with 4 type tabs (All / Uploads / Masters / Downloads) each showing live counts.
+  - Case-insensitive email/name search with Enter-to-apply + Clear button.
+  - Each row shows When, User (+ tier/ADMIN badge), Event chip, File info (ext/duration/size or preset/format), and a Details column that inlines LUFS target vs measured with a colour-coded Δ (green ≤0.5, amber ≤1.5, red beyond).
+  - Clickable rows expand a two-column detail grid with all captured fields (log_id, track_id, custom params, true peak, LRA, etc.).
+  - Prev/Next pager (25 per page), total count, refresh button.
+- **Verified**: 13/13 backend tests passed (iteration_7.json). Fire preset (-9 LUFS target) measured exactly -9.0 LUFS post-master on a sine-tone test file — ebur128 integration is accurate.
+- **Testing agent created** `/app/backend/tests/test_admin_activity_logs.py` as a regression suite.
+
+## Deferred (noted in this session)
+- `Iteration 5` already implemented the full batch-upload queue logic in Dashboard.jsx (sequential uploads, per-item status, Remove/Open/Clear controls). Previous handoff incorrectly flagged this as missing — re-verified.
+- Auto-gain → `/process` payload sync was verified correct in Workspace.jsx (line ~129 already passes `payload.input_gain = inputGain`, seeded from `track.auto_input_gain_db` on load and via the AUTO button).
+
+
 - Added `/app/frontend/src/components/PeakMeter.jsx` — a 10-segment vertical LED meter rendering green (<-12 dB), yellow (-12..-3 dB), red (>=-3 dB) with peak-hold + decay.
 - Workspace audio graph: `source → gain → analyser → destination`. Analyser uses fftSize=2048 Float time-domain data. Meter reads POST-gain so users see exactly how loud the signal will be after their input-gain adjustment.
 - Meter only ticks RAF while `playing === "mastered"` — zero CPU cost when idle.
