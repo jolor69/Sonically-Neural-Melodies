@@ -5,6 +5,7 @@ import PresetCard from "../components/PresetCard";
 import Waveform from "../components/Waveform";
 import { api, streamUrl, downloadUrl } from "../lib/api";
 import { FALLBACK_PRESETS } from "../lib/presetsFallback";
+import PeakMeter from "../components/PeakMeter";
 import { ArrowLeft, Download, Loader2, Play, Pause, Wand2, Lock, ChevronDown, Clock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
@@ -42,13 +43,15 @@ export default function Workspace() {
   // Web Audio plumbing for real-time input gain preview on playback
   const audioCtxRef = useRef(null);
   const gainNodeRef = useRef(null);
+  const analyserNodeRef = useRef(null);
   const audioSourceRef = useRef(null);
+  const [analyserReady, setAnalyserReady] = useState(false);
 
   /**
-   * Connect the mastered-audio element through a GainNode so dragging the
-   * input-gain slider changes perceived volume LIVE during playback.
-   * The node is only created once per session (Web Audio can only wrap an
-   * element once). The downloadable file is still the server-baked master.
+   * Connect the mastered-audio element through a GainNode + AnalyserNode so:
+   *   1. Dragging the input-gain slider changes perceived volume LIVE.
+   *   2. The peak LED meter can sample post-gain levels in real-time.
+   * Only created once per session (Web Audio can only wrap an element once).
    */
   const ensureAudioGraph = () => {
     const el = masterAudio.current;
@@ -61,10 +64,16 @@ export default function Workspace() {
       const source = ctx.createMediaElementSource(el);
       const gainNode = ctx.createGain();
       gainNode.gain.value = Math.pow(10, inputGain / 20);
-      source.connect(gainNode).connect(ctx.destination);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(gainNode);
+      gainNode.connect(analyser);
+      analyser.connect(ctx.destination);
       audioCtxRef.current = ctx;
       gainNodeRef.current = gainNode;
+      analyserNodeRef.current = analyser;
       audioSourceRef.current = source;
+      setAnalyserReady(true);
     } catch (e) {
       console.warn("Web Audio setup failed — real-time gain preview disabled:", e);
     }
@@ -362,21 +371,30 @@ export default function Workspace() {
                       : ""}
                   </button>
                 </div>
-                <Slider
-                  value={[inputGain]}
-                  onValueChange={(v) => { if (advUnlocked) { setInputGain(v[0]); setIsAuto(false); } }}
-                  min={-12}
-                  max={12}
-                  step={0.5}
-                  disabled={!advUnlocked}
-                  data-testid="input-gain-slider"
-                />
-                <div className="flex justify-between mt-2 label-overline text-[10px]">
-                  <span>-12 dB</span>
-                  <span className={advUnlocked ? "text-[#E28C22]" : "text-[#6B7280]"} data-testid="input-gain-value">
-                    {inputGain > 0 ? "+" : ""}{Number(inputGain).toFixed(1)} dB {isAuto && advUnlocked ? "(auto)" : ""}
-                  </span>
-                  <span>+12 dB</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <Slider
+                      value={[inputGain]}
+                      onValueChange={(v) => { if (advUnlocked) { setInputGain(v[0]); setIsAuto(false); } }}
+                      min={-12}
+                      max={12}
+                      step={0.5}
+                      disabled={!advUnlocked}
+                      data-testid="input-gain-slider"
+                    />
+                    <div className="flex justify-between mt-2 label-overline text-[10px]">
+                      <span>-12 dB</span>
+                      <span className={advUnlocked ? "text-[#E28C22]" : "text-[#6B7280]"} data-testid="input-gain-value">
+                        {inputGain > 0 ? "+" : ""}{Number(inputGain).toFixed(1)} dB {isAuto && advUnlocked ? "(auto)" : ""}
+                      </span>
+                      <span>+12 dB</span>
+                    </div>
+                  </div>
+                  <PeakMeter
+                    analyser={analyserNodeRef.current}
+                    active={analyserReady && playing === "mastered"}
+                    testId="peak-meter-input"
+                  />
                 </div>
               </div>
               {!advUnlocked && (

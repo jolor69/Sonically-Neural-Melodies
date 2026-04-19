@@ -65,6 +65,13 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 14 — Peak LED meter (2026-02-18)
+- Added `/app/frontend/src/components/PeakMeter.jsx` — a 10-segment vertical LED meter rendering green (<-12 dB), yellow (-12..-3 dB), red (>=-3 dB) with peak-hold + decay.
+- Workspace audio graph: `source → gain → analyser → destination`. Analyser uses fftSize=2048 Float time-domain data. Meter reads POST-gain so users see exactly how loud the signal will be after their input-gain adjustment.
+- Meter only ticks RAF while `playing === "mastered"` — zero CPU cost when idle.
+- Placed inline to the right of the Input Gain slider. Testids: `peak-meter-input`, `peak-meter-input-value`.
+- Verified: logged in as admin, opened a mastered track, meter renders at idle "—"; gain slider moves; once play starts the meter animates live and reflects input-gain changes in real-time.
+
 ## Iteration 13 — ADMIN badge everywhere (2026-02-18)
 - User request: admin user `jolor69@gmail.com` should always show as **ADMIN** (not FREE/PRO/STUDIO) and all features must stay unlocked.
 - **Backend already correct**: `is_admin(user)` is an email-match check against `ADMIN_EMAILS = {"jolor69@gmail.com"}` — evaluated on every auth response. Tier upgrades/downgrades/expiry cannot revoke admin. Upload size limits, duration limits, preset allowlist, monthly export quota, advanced controls (Intensity + EQ + Input-gain) all already bypass for admin.
