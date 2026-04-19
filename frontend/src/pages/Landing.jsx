@@ -190,8 +190,7 @@ export default function Landing() {
             <span className="text-brand-gradient">in under a minute.</span>
           </h1>
           <p className="mt-8 text-lg text-[#9CA3AF] max-w-2xl leading-relaxed fade-up" style={{ animationDelay: "150ms" }}>
-            Professional mastering driven by engineer-curated presets. Upload a track, pick a vibe,
-            ship it to streaming. No plugins. No sessions. No guesswork.
+            Professional mastering driven by engineer-curated presets. Upload a track, pick a vibe, skip the complicated settings, ship it to streaming. No plugins. No sessions. No guesswork.
           </p>
           <div className="mt-10 flex flex-wrap gap-4 fade-up" style={{ animationDelay: "300ms" }}>
             <Link
@@ -437,7 +436,7 @@ export default function Landing() {
               "3 exports / month",
               "WAV 16-bit",
               "4 presets: Universal · Fire · Clarity · Tape",
-              "Tracks up to 2 minutes",
+              "Tracks up to 5 minutes",
             ]}
             cta="Start Free"
             ctaTo="/login?mode=signup"
@@ -468,10 +467,10 @@ export default function Landing() {
             period="/ month"
             billed={billing === "yearly" ? "Billed $119.99/yr" : "Billed monthly"}
             features={[
+              "All in Pro + Hi-res 24/96 & 24/192",
               "Unlimited exports",
-              "Hi-res 24/96 & 24/192",
               "All 8 presets + full controls",
-              "Batch upload + priority processing",
+              "Priority processing queue",
             ]}
             cta="Upgrade to Studio"
             ctaTo="/login?mode=signup"

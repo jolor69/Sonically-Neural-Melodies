@@ -33,6 +33,7 @@ export default function Workspace() {
   const [playing, setPlaying] = useState(null);
   const [intensity, setIntensity] = useState(1.0);
   const [inputGain, setInputGain] = useState(0);
+  const [isAuto, setIsAuto] = useState(true); // When true, slider mirrors auto value
   const [eqLow, setEqLow] = useState(0);
   const [eqMid, setEqMid] = useState(0);
   const [eqHigh, setEqHigh] = useState(0);
@@ -49,6 +50,11 @@ export default function Workspace() {
     api.get(`/tracks/${trackId}`).then((r) => {
       setTrack(r.data);
       if (r.data.preset_id) setSelectedId(r.data.preset_id);
+      // Auto-select the server-computed optimal input gain on first load
+      if (typeof r.data.auto_input_gain_db === "number") {
+        setInputGain(r.data.auto_input_gain_db);
+        setIsAuto(true);
+      }
     }).catch(() => { toast.error("Track not found"); navigate("/dashboard"); });
     api.get("/presets")
       .then((r) => {
@@ -283,10 +289,33 @@ export default function Workspace() {
                 </div>
               </div>
               <div className="mt-4 border-t border-[#2A2A35] pt-4">
-                <div className="label-overline mb-2">Input gain</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="label-overline">Input gain</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!advUnlocked) return;
+                      const autoVal = track?.auto_input_gain_db ?? 0;
+                      setInputGain(autoVal);
+                      setIsAuto(true);
+                    }}
+                    disabled={!advUnlocked}
+                    data-testid="input-gain-auto-btn"
+                    className={`text-[10px] font-bold tracking-widest px-3 py-1 rounded-full transition ${
+                      isAuto && advUnlocked
+                        ? "bg-[#A855F7] text-white"
+                        : "border border-[#2A2A35] text-[#9CA3AF] hover:border-[#A855F7] hover:text-[#A855F7]"
+                    } ${!advUnlocked ? "opacity-40 cursor-not-allowed" : ""}`}
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    AUTO{track?.auto_input_gain_db !== undefined
+                      ? ` · ${track.auto_input_gain_db > 0 ? "+" : ""}${Number(track.auto_input_gain_db).toFixed(1)} dB`
+                      : ""}
+                  </button>
+                </div>
                 <Slider
                   value={[inputGain]}
-                  onValueChange={(v) => advUnlocked && setInputGain(v[0])}
+                  onValueChange={(v) => { if (advUnlocked) { setInputGain(v[0]); setIsAuto(false); } }}
                   min={-12}
                   max={12}
                   step={0.5}
@@ -295,7 +324,9 @@ export default function Workspace() {
                 />
                 <div className="flex justify-between mt-2 label-overline text-[10px]">
                   <span>-12 dB</span>
-                  <span className={advUnlocked ? "text-[#E28C22]" : "text-[#6B7280]"}>{inputGain > 0 ? "+" : ""}{inputGain.toFixed(1)} dB</span>
+                  <span className={advUnlocked ? "text-[#E28C22]" : "text-[#6B7280]"} data-testid="input-gain-value">
+                    {inputGain > 0 ? "+" : ""}{Number(inputGain).toFixed(1)} dB {isAuto && advUnlocked ? "(auto)" : ""}
+                  </span>
                   <span>+12 dB</span>
                 </div>
               </div>

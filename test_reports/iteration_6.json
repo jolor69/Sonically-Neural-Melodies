@@ -1,0 +1,89 @@
+{
+  "summary": "Iteration 11 testing complete - All backend tests passed (10/10), all frontend features verified. Tier limits, auto input gain, pricing UI changes, and landing page updates all working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11.py",
+    "/app/test_reports/pytest/iteration11_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration11.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all UI features verified)"
+  },
+  "test_credentials": {
+    "admin_account": "jolor69@gmail.com / AdminJolor2026!",
+    "demo_account": "demo@sonically.io / DemoUser123! (NOTE: upgraded to PRO tier from previous testing)",
+    "free_tier_test_account": "test_free_iter11@sonically.io / TestFree123!"
+  },
+  "seed_data_creation": "Created test_free_iter11@sonically.io for free tier testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 11 features verified: (1) Tier limits: free=5min/50MB, pro/studio=10min/200MB - verified via GET /api/plans. (2) Auto input gain: upload returns auto_input_gain_db field, GET /api/tracks/{id} includes it, value is ~+9.5 dB for quiet audio (amplitude 0.3). (3) Pricing page: POPULAR badge purple bg (#A855F7) + white text, SAVE 25% dark purple (#6B21A8) when active / light purple (#A855F7) when inactive, Studio first bullet 'All in Pro + Hi-res 24/96 & 24/192', Free tier 'Tracks up to 5 minutes'. (4) Landing page: hero slogan includes 'skip the complicated settings', Free tier '5 minutes', Studio first bullet correct. (5) Dashboard dropzone: free tier shows 'max 5 min', pro/studio shows 'max 10 min'. (6) Workspace input-gain: AUTO button shows computed dB value (testid='input-gain-auto-btn'), slider (testid='input-gain-slider'), value display shows '(auto)' when auto is active, manual adjustment removes '(auto)', clicking AUTO restores it.",
+  "tests_executed": {
+    "backend_tests": {
+      "tier_limits": [
+        "GET /api/plans → tier_limits.free.max_duration_sec === 300 (5min)",
+        "GET /api/plans → tier_limits.free.max_file_mb === 50",
+        "GET /api/plans → tier_limits.pro.max_duration_sec === 600 (10min)",
+        "GET /api/plans → tier_limits.pro.max_file_mb === 200",
+        "GET /api/plans → tier_limits.studio.max_duration_sec === 600 (10min)",
+        "GET /api/plans → tier_limits.studio.max_file_mb === 200"
+      ],
+      "auto_input_gain": [
+        "POST /api/tracks/upload returns auto_input_gain_db numeric field",
+        "Auto gain for amplitude 0.3 audio (~-10.5 dB peak) is ~+9.5 dB (in range [7, 12])",
+        "GET /api/tracks/{id} returns auto_input_gain_db",
+        "POST /api/tracks/process accepts input_gain parameter"
+      ],
+      "upload_validation": [
+        "Free tier can upload short tracks (under 5 min)",
+        "Admin bypasses tier limits"
+      ],
+      "health": [
+        "GET /api/health returns status=ok, db=up",
+        "GET /api/presets returns 8 presets"
+      ]
+    },
+    "frontend_tests": {
+      "pricing_page": [
+        "POPULAR badge on Pro card: purple bg (#A855F7) + white text",
+        "SAVE 25% text: dark purple (#6B21A8) when active, light purple (#A855F7) when inactive",
+        "Studio first bullet: 'All in Pro + Hi-res 24/96 & 24/192'",
+        "Free tier includes 'Tracks up to 5 minutes'"
+      ],
+      "landing_page": [
+        "Hero slogan includes 'skip the complicated settings'",
+        "Free tier pricing preview: 'Tracks up to 5 minutes'",
+        "Studio tier pricing preview: first bullet 'All in Pro + Hi-res 24/96 & 24/192'"
+      ],
+      "dashboard": [
+        "Free tier dropzone shows 'max 5 min' and 'up to 50MB'",
+        "Free tier shows batch upgrade hint",
+        "Pro tier dropzone shows 'max 10 min' and 'batch upload enabled'"
+      ],
+      "workspace_input_gain": [
+        "AUTO button (testid='input-gain-auto-btn') shows 'AUTO · +X.X dB'",
+        "Input gain slider (testid='input-gain-slider') present",
+        "Value display (testid='input-gain-value') shows '(auto)' when auto is active",
+        "Manual slider adjustment removes '(auto)' label",
+        "Clicking AUTO button restores '(auto)' label and auto value"
+      ]
+    }
+  },
+  "notes": {
+    "demo_user_tier": "demo@sonically.io was upgraded to PRO tier from previous PayPal testing. Created test_free_iter11@sonically.io for free tier testing.",
+    "console_errors": "Some script errors visible in browser console on pricing page, but UI functionality is correct."
+  }
+}

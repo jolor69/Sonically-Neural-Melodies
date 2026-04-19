@@ -105,7 +105,7 @@ export default function Pricing() {
                 {b} {b === "yearly" && yearlySavePct > 0 && (
                   <span
                     className={`ml-2 text-[10px] font-bold tracking-widest ${
-                      billing === b ? "text-[#0A0A0C]" : "text-[#E28C22]"
+                      billing === b ? "text-[#6B21A8]" : "text-[#A855F7]"
                     }`}
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
@@ -167,7 +167,7 @@ export default function Pricing() {
               "3 exports / month",
               "WAV 16-bit",
               "4 presets: Universal · Fire · Clarity · Tape",
-              "Tracks up to 2 minutes",
+              "Tracks up to 5 minutes",
             ]}
             testId="plan-free"
             current={user?.subscription_tier === "free"}
@@ -207,10 +207,10 @@ export default function Pricing() {
             billed={billing === "yearly" ? `Billed $${applyDiscountPrice(studioYearly)}/yr` : "Billed monthly"}
             strike={discount ? `$${studioPerMo.toFixed(2)}` : null}
             features={[
+              "All in Pro + Hi-res 24/96 & 24/192",
               "Unlimited exports",
-              "Hi-res 24/96 & 24/192",
               "All 8 presets + full controls",
-              "Batch upload + priority processing",
+              "Priority processing queue",
             ]}
             testId="plan-studio"
             current={user?.subscription_tier === "studio"}
@@ -268,7 +268,7 @@ function PriceCard({ name, tagline, price, period, billed, features, highlight, 
     >
       {badge && (
         <div
-          className="absolute -top-3 left-8 text-[10px] tracking-widest uppercase font-black bg-[#E28C22] text-[#0A0A0C] px-3 py-1 rounded-full"
+          className="absolute -top-3 left-8 text-[10px] tracking-widest uppercase font-black bg-[#A855F7] text-white px-3 py-1 rounded-full"
           style={{ fontFamily: "'JetBrains Mono', monospace" }}
         >
           {badge}

@@ -21,7 +21,7 @@ load_dotenv(ROOT_DIR / ".env")
 # Local imports
 from presets import PRESETS, PRESET_MAP, get_preset_public
 from storage import init_storage, put_object, get_object, build_path, APP_NAME
-from audio_engine import apply_preset, probe_duration, waveform_peaks
+from audio_engine import apply_preset, probe_duration, waveform_peaks, compute_auto_gain
 from auth import (
     hash_password, verify_password, create_jwt, decode_jwt,
     fetch_emergent_session, resolve_user, new_user_id,
@@ -193,21 +193,21 @@ TIER_LIMITS = {
     "free": {
         "max_tracks_per_month": 3,
         "max_file_mb": 50,
-        "max_duration_sec": 120,
+        "max_duration_sec": 300,  # 5 minutes
         "advanced_controls": False,
         "allowed_presets": ["universal", "fire", "clarity", "tape"],
     },
     "pro": {
         "max_tracks_per_month": 20,
-        "max_file_mb": 100,
-        "max_duration_sec": 300,  # 5 minutes (admin-overrideable)
+        "max_file_mb": 200,
+        "max_duration_sec": 600,  # 10 minutes
         "advanced_controls": True,
         "allowed_presets": None,
     },
     "studio": {
         "max_tracks_per_month": 10000,
         "max_file_mb": 200,
-        "max_duration_sec": 300,  # 5 minutes (admin-overrideable)
+        "max_duration_sec": 600,  # 10 minutes
         "advanced_controls": True,
         "allowed_presets": None,
     },
@@ -557,6 +557,7 @@ async def upload_track(
         )
     put_object(storage_path, data, file.content_type or "audio/wav")
     peaks = waveform_peaks(data, ext)
+    auto_gain_db = compute_auto_gain(data, ext)
 
     doc = {
         "track_id": track_id,
@@ -570,6 +571,7 @@ async def upload_track(
         "duration_sec": duration,
         "peaks_original": peaks,
         "peaks_mastered": None,
+        "auto_input_gain_db": auto_gain_db,
         "status": "uploaded",
         "is_deleted": False,
         "created_at": iso(utcnow()),
@@ -831,6 +833,7 @@ def _public_track(t: dict) -> dict:
         "duration_sec": t.get("duration_sec", 0),
         "peaks_original": t.get("peaks_original") or [],
         "peaks_mastered": t.get("peaks_mastered") or [],
+        "auto_input_gain_db": t.get("auto_input_gain_db", 0.0),
         "status": t.get("status", "uploaded"),
         "created_at": t.get("created_at"),
         "mastered_at": t.get("mastered_at"),

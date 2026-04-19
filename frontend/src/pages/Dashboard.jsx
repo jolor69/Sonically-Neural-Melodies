@@ -157,7 +157,7 @@ export default function Dashboard() {
               </div>
               <div className="text-sm text-[#9CA3AF]">
                 WAV, MP3, FLAC, M4A · up to {maxMB}MB
-                {tier === "free" ? " · max 2 min" : ""}
+                {tier === "free" ? " · max 5 min" : " · max 10 min"}
                 {canBatch ? " · batch upload enabled" : ""}
               </div>
               {!canBatch && (

@@ -60,6 +60,49 @@ def probe_duration(input_bytes: bytes, input_ext: str) -> float:
             pass
 
 
+def compute_auto_gain(input_bytes: bytes, input_ext: str, target_peak_db: float = -1.0) -> float:
+    """
+    Analyses the source and returns the dB adjustment needed to bring its max peak to target_peak_db.
+    Positive = boost, negative = attenuate. Uses ffmpeg's `volumedetect` filter.
+    Returns 0.0 if analysis fails.
+    """
+    with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
+        fin.write(input_bytes)
+        in_path = fin.name
+    try:
+        # volumedetect writes stats to stderr; route to /dev/null for output
+        result = subprocess.run(
+            ["ffmpeg", "-i", in_path, "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, timeout=120,
+        )
+        stderr = result.stderr.decode("utf-8", errors="ignore")
+        max_volume = None
+        for line in stderr.splitlines():
+            if "max_volume:" in line:
+                # e.g. "[Parsed_volumedetect_0 @ ...] max_volume: -3.9 dB"
+                try:
+                    max_volume = float(line.split("max_volume:", 1)[1].strip().split()[0])
+                    break
+                except (ValueError, IndexError):
+                    pass
+        if max_volume is None:
+            return 0.0
+        # Auto-gain = how many dB we need to add so the peak lands at target_peak_db.
+        # Example: max_volume = -3.9 dB, target = -1.0 dB  → auto-gain = +2.9 dB
+        # We want the applied gain to NORMALIZE towards target without clipping.
+        # Clamp to the backend's slider range [-12, +12].
+        adjustment = target_peak_db - max_volume
+        adjustment = max(-12.0, min(12.0, round(adjustment, 1)))
+        return adjustment
+    except Exception as e:
+        logger.warning(f"auto gain analysis failed: {e}")
+        return 0.0
+    finally:
+        try:
+            os.unlink(in_path)
+        except OSError:
+            pass
+
 def waveform_peaks(input_bytes: bytes, input_ext: str, num_points: int = 120) -> list:
     """Extract simple peak data for waveform visualization."""
     with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
