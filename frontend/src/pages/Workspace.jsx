@@ -39,6 +39,43 @@ export default function Workspace() {
   const [eqHigh, setEqHigh] = useState(0);
   const origAudio = useRef(null);
   const masterAudio = useRef(null);
+  // Web Audio plumbing for real-time input gain preview on playback
+  const audioCtxRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const audioSourceRef = useRef(null);
+
+  /**
+   * Connect the mastered-audio element through a GainNode so dragging the
+   * input-gain slider changes perceived volume LIVE during playback.
+   * The node is only created once per session (Web Audio can only wrap an
+   * element once). The downloadable file is still the server-baked master.
+   */
+  const ensureAudioGraph = () => {
+    const el = masterAudio.current;
+    if (!el) return;
+    if (audioSourceRef.current) return; // already wired
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const source = ctx.createMediaElementSource(el);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = Math.pow(10, inputGain / 20);
+      source.connect(gainNode).connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      gainNodeRef.current = gainNode;
+      audioSourceRef.current = source;
+    } catch (e) {
+      console.warn("Web Audio setup failed — real-time gain preview disabled:", e);
+    }
+  };
+
+  // Apply gain in real-time whenever the slider moves or the graph initializes
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = Math.pow(10, inputGain / 20);
+    }
+  }, [inputGain]);
 
   const userTier = user?.subscription_tier || "free";
   const userTierRank = TIER_RANK[userTier] ?? 0;
@@ -108,7 +145,16 @@ export default function Workspace() {
       self.pause();
       setPlaying(null);
     } else {
-      try { self.currentTime = 0; } catch {}
+      // Lazily build the Web Audio graph on first mastered playback so the
+      // input-gain slider affects volume in real-time. Must happen on a user
+      // gesture (Chrome autoplay policy).
+      if (which === "mastered") {
+        ensureAudioGraph();
+        if (audioCtxRef.current?.state === "suspended") {
+          audioCtxRef.current.resume().catch(() => {});
+        }
+      }
+      try { self.currentTime = 0; } catch { /* empty */ }
       self.play().then(() => {
         setPlaying(which);
       }).catch((err) => {
@@ -290,7 +336,10 @@ export default function Workspace() {
               </div>
               <div className="mt-4 border-t border-[#2A2A35] pt-4">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="label-overline">Input gain</div>
+                  <div>
+                    <div className="label-overline">Input gain</div>
+                    <div className="text-[10px] text-[#6B7280] mt-0.5">Live preview while the mastered track plays. Apply to bake it in.</div>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -301,7 +350,7 @@ export default function Workspace() {
                     }}
                     disabled={!advUnlocked}
                     data-testid="input-gain-auto-btn"
-                    className={`text-[10px] font-bold tracking-widest px-3 py-1 rounded-full transition ${
+                    className={`text-[10px] font-bold tracking-widest px-3 py-1 rounded-full transition shrink-0 ${
                       isAuto && advUnlocked
                         ? "bg-[#A855F7] text-white"
                         : "border border-[#2A2A35] text-[#9CA3AF] hover:border-[#A855F7] hover:text-[#A855F7]"

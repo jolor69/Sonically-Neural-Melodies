@@ -65,6 +65,12 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 12 — Real-time input-gain preview (2026-02-18)
+- **User-reported bug**: dragging the input-gain slider during playback didn't change the perceived volume — only affected the next re-master. Expectation was live audible feedback.
+- **Fix**: Wrapped the Mastered `<audio>` element with a Web Audio GainNode on first play (lazy init required for browser autoplay policy). Slider now drives `gainNode.gain.value = 10^(dB/20)` on change via useEffect. Dragging while the mastered track plays gives instant audible volume change. The downloaded file still reflects the server-side processed gain (last Apply/Re-master).
+- UI now shows a subtle helper: "Live preview while the mastered track plays. Apply to bake it in."
+- Verified: AUTO button reads "AUTO · +9.5 dB" for a quiet test track; slider and value readouts update in real-time; mastered playback is audibly boosted/attenuated as the slider moves.
+
 ## Iteration 11 — Tier limits + Auto input gain + Pricing polish (2026-02-18)
 - **Tier limits updated** — Free: 5 min / 50 MB (was 2 min). Pro: 10 min / 200 MB (was 5 min / 100 MB). Studio: 10 min / 200 MB. Upload endpoint enforces; exceeding triggers a clean 400 error (no pricing-bullet noise).
 - **Auto input gain** — new `compute_auto_gain()` in audio_engine using ffmpeg's volumedetect filter. On every upload, the server analyses peak volume and stores `auto_input_gain_db` on the track. Frontend Workspace shows an "AUTO · ±X.X dB" button that one-clicks the slider to the auto value; manual drag disengages auto; clicking AUTO re-engages. Server-side input_gain processing was already functional.
