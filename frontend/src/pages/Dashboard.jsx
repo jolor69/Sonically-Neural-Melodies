@@ -102,8 +102,11 @@ export default function Dashboard() {
   const removeFromQueue = (id) => setQueue((q) => q.filter((x) => x.id !== id));
   const clearDone = () => setQueue((q) => q.filter((x) => x.status !== "done"));
 
+  const isAdmin = !!user?.is_admin;
   const tier = user?.subscription_tier || "free";
-  const maxMB = tier === "studio" ? 200 : tier === "pro" ? 100 : 50;
+  // Admin always sees the Studio-level limits since the backend bypasses quotas for them.
+  const effectiveTier = isAdmin ? "studio" : tier;
+  const maxMB = effectiveTier === "studio" ? 200 : effectiveTier === "pro" ? 200 : 50;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-white">
@@ -118,7 +121,9 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2 label-overline">
             <span className="text-[#9CA3AF]">Plan</span>
-            <span className="text-brand-gradient font-bold" data-testid="tier-badge">{user?.subscription_tier}</span>
+            <span className={`font-bold ${user?.is_admin ? "text-[#A855F7]" : "text-brand-gradient"}`} data-testid="tier-badge">
+              {user?.is_admin ? "ADMIN" : user?.subscription_tier}
+            </span>
           </div>
         </div>
 
@@ -157,7 +162,7 @@ export default function Dashboard() {
               </div>
               <div className="text-sm text-[#9CA3AF]">
                 WAV, MP3, FLAC, M4A · up to {maxMB}MB
-                {tier === "free" ? " · max 5 min" : " · max 10 min"}
+                {effectiveTier === "free" ? " · max 5 min" : " · max 10 min"}
                 {canBatch ? " · batch upload enabled" : ""}
               </div>
               {!canBatch && (

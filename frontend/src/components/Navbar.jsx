@@ -70,8 +70,13 @@ export default function Navbar({ variant = "app" }) {
               >
                 {user.name}
               </Link>
-              <span className="hidden md:inline-block label-overline text-[#E28C22]" data-testid="nav-tier">
-                {user.subscription_tier}
+              <span
+                className={`hidden md:inline-block label-overline ${
+                  user.is_admin ? "text-[#A855F7] font-black" : "text-[#E28C22]"
+                }`}
+                data-testid="nav-tier"
+              >
+                {user.is_admin ? "ADMIN" : user.subscription_tier}
               </span>
               <button
                 onClick={() => { logout(); navigate("/"); }}

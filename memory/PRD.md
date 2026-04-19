@@ -65,6 +65,14 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 13 — ADMIN badge everywhere (2026-02-18)
+- User request: admin user `jolor69@gmail.com` should always show as **ADMIN** (not FREE/PRO/STUDIO) and all features must stay unlocked.
+- **Backend already correct**: `is_admin(user)` is an email-match check against `ADMIN_EMAILS = {"jolor69@gmail.com"}` — evaluated on every auth response. Tier upgrades/downgrades/expiry cannot revoke admin. Upload size limits, duration limits, preset allowlist, monthly export quota, advanced controls (Intensity + EQ + Input-gain) all already bypass for admin.
+- **Frontend fixes**:
+  - `Navbar`: tier label now shows "ADMIN" in bold purple `#A855F7` when `user.is_admin === true`, else the tier (FREE/PRO/STUDIO) in orange.
+  - `Dashboard` header: "Plan ADMIN" label in purple; dropzone hint now shows Studio-level `up to 200MB · max 10 min` for admin (since backend bypasses limits).
+- Verified: login as jolor69 → navbar shows "ADMIN", dashboard shows "PLAN ADMIN", dropzone shows 200MB/10min, Admin link visible.
+
 ## Iteration 12 — Real-time input-gain preview (2026-02-18)
 - **User-reported bug**: dragging the input-gain slider during playback didn't change the perceived volume — only affected the next re-master. Expectation was live audible feedback.
 - **Fix**: Wrapped the Mastered `<audio>` element with a Web Audio GainNode on first play (lazy init required for browser autoplay policy). Slider now drives `gainNode.gain.value = 10^(dB/20)` on change via useEffect. Dragging while the mastered track plays gives instant audible volume change. The downloaded file still reflects the server-side processed gain (last Apply/Re-master).
