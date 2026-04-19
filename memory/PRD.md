@@ -65,6 +65,15 @@ Build an online audio mastering tool with:
 - Frontend: added `PayPalCheckoutButton` component and wrapped `/pricing` in a single `PayPalScriptProvider`. Each Pro/Studio card shows PayPal smart buttons under the existing Stripe "Upgrade to …" CTA. Buttons auto-disable when user already owns that tier.
 - Tested 23/23 backend + frontend assertions (iteration_2.json). Real PayPal buyer approval can only be verified interactively; all automatable paths pass.
 
+## Iteration 11 — Tier limits + Auto input gain + Pricing polish (2026-02-18)
+- **Tier limits updated** — Free: 5 min / 50 MB (was 2 min). Pro: 10 min / 200 MB (was 5 min / 100 MB). Studio: 10 min / 200 MB. Upload endpoint enforces; exceeding triggers a clean 400 error (no pricing-bullet noise).
+- **Auto input gain** — new `compute_auto_gain()` in audio_engine using ffmpeg's volumedetect filter. On every upload, the server analyses peak volume and stores `auto_input_gain_db` on the track. Frontend Workspace shows an "AUTO · ±X.X dB" button that one-clicks the slider to the auto value; manual drag disengages auto; clicking AUTO re-engages. Server-side input_gain processing was already functional.
+- **Pricing contrast fixes** — POPULAR badge now `#A855F7` bg + white text (both readable); SAVE 25% yearly toggle uses dark purple `#6B21A8` when active and light purple `#A855F7` when inactive.
+- **Studio copy** — first bullet consolidated to "All in Pro + Hi-res 24/96 & 24/192".
+- **Landing slogan** — added "skip the complicated settings" phrase per user request.
+- **Dashboard dropzone** — now shows "max 5 min" for free, "max 10 min" for pro/studio.
+- Tested 10/10 backend + full frontend (iteration_6.json).
+
 ## Iteration 10 — Deployment fixes (2026-02-18)
 - **CRITICAL BLOCKER fixed**: `.gitignore` had 4 duplicated blocks of `.env` / `.env.*` / `*.env` patterns that prevented Emergent's deploy pipeline from finding/updating env files for the production container. Cleaned up to a single, commented section that explicitly notes .env files are committed (secrets stay in deployment env vars, not the repo).
 - **MongoDB Atlas resilience**: motor `AsyncIOMotorClient` now uses `serverSelectionTimeoutMS=10_000`, `connectTimeoutMS=10_000`, `socketTimeoutMS=30_000`, `retryWrites=True`, `retryReads=True` — fixes raw `NetworkTimeout` traces on Atlas cold-start / SRV-DNS slowness.
