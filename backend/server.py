@@ -21,7 +21,7 @@ load_dotenv(ROOT_DIR / ".env")
 # Local imports
 from presets import PRESETS, PRESET_MAP, get_preset_public
 from storage import init_storage, put_object, get_object, build_path, APP_NAME
-from audio_engine import apply_preset, probe_duration, waveform_peaks, compute_auto_gain
+from audio_engine import apply_preset, probe_duration, waveform_peaks, compute_auto_gain, measure_loudness
 from auth import (
     hash_password, verify_password, create_jwt, decode_jwt,
     fetch_emergent_session, resolve_user, new_user_id,
@@ -305,6 +305,27 @@ def iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
+# ---------------- ACTIVITY LOG ----------------
+async def log_activity(user: dict, event_type: str, **extra):
+    """Insert an audit-trail record for admin activity-log view.
+    Never raises — logging failures must not break the user-facing request."""
+    try:
+        doc = {
+            "log_id": f"log_{uuid.uuid4().hex[:16]}",
+            "user_id": user.get("user_id"),
+            "user_email": user.get("email"),
+            "user_name": user.get("name"),
+            "subscription_tier": user.get("subscription_tier", "free"),
+            "is_admin": is_admin(user),
+            "event_type": event_type,  # "upload" | "process" | "download"
+            "timestamp": iso(utcnow()),
+            **extra,
+        }
+        await db.activity_logs.insert_one(doc)
+    except Exception as e:
+        logger.warning(f"activity log insert failed ({event_type}): {e}")
+
+
 # ---------------- ROUTES: HEALTH ----------------
 @api.get("/")
 async def root():
@@ -578,6 +599,16 @@ async def upload_track(
         "mastered_at": None,
     }
     await db.tracks.insert_one(doc)
+    await log_activity(
+        user,
+        "upload",
+        track_id=track_id,
+        track_filename=filename,
+        file_ext=ext,
+        file_size_mb=round(size_mb, 2),
+        duration_sec=round(duration, 2),
+        auto_input_gain_db=auto_gain_db,
+    )
     return _public_track(doc)
 
 
@@ -688,6 +719,11 @@ async def process_track(
     mastered_bytes = apply_preset(original_bytes, track["ext"], filter_chain, "wav")
     peaks_mastered = waveform_peaks(mastered_bytes, "wav")
 
+    # Measure actual integrated LUFS / true peak / LRA of the mastered output.
+    # These are cached on the track doc so admin activity logs (and future
+    # download events) can compare the real output vs the preset's target.
+    loudness = measure_loudness(mastered_bytes, "wav")
+
     mastered_filename = f"{track['track_id']}_{preset['id']}.wav"
     mastered_path = build_path("mastered", user["user_id"], mastered_filename)
     put_object(mastered_path, mastered_bytes, "audio/wav")
@@ -700,9 +736,41 @@ async def process_track(
             "peaks_mastered": peaks_mastered,
             "status": "mastered",
             "mastered_at": iso(utcnow()),
+            "mastered_lufs_integrated": loudness.get("integrated_lufs"),
+            "mastered_true_peak_db": loudness.get("true_peak_db"),
+            "mastered_lra": loudness.get("lra"),
         }},
     )
     updated = await db.tracks.find_one({"track_id": body.track_id}, {"_id": 0})
+
+    target_lufs = preset.get("lufs")
+    measured_lufs = loudness.get("integrated_lufs")
+    lufs_delta = (
+        round(measured_lufs - target_lufs, 2)
+        if (measured_lufs is not None and target_lufs is not None)
+        else None
+    )
+    await log_activity(
+        user,
+        "process",
+        track_id=body.track_id,
+        track_filename=track.get("original_filename"),
+        duration_sec=round(track.get("duration_sec", 0), 2),
+        preset_id=preset["id"],
+        preset_name=preset["name"],
+        preset_target_lufs=target_lufs,
+        params={
+            "intensity": body.intensity,
+            "eq_low": body.eq_low,
+            "eq_mid": body.eq_mid,
+            "eq_high": body.eq_high,
+            "input_gain": body.input_gain,
+        },
+        measured_lufs=measured_lufs,
+        measured_true_peak_db=loudness.get("true_peak_db"),
+        measured_lra=loudness.get("lra"),
+        lufs_delta=lufs_delta,
+    )
     return _public_track(updated)
 
 
@@ -802,6 +870,36 @@ async def download_track(
 
     safe_name = (track["original_filename"].rsplit(".", 1)[0] or "master")[:80]
     download_name = f"{safe_name}_mastered_{format}.{fmt['ext']}"
+
+    # Activity log: record the download with actual mastered-output metrics
+    # so admin can audit preset accuracy (target vs measured LUFS/true-peak).
+    preset = PRESET_MAP.get(track.get("preset_id") or "") or {}
+    target_lufs = preset.get("lufs")
+    measured_lufs = track.get("mastered_lufs_integrated")
+    lufs_delta = (
+        round(measured_lufs - target_lufs, 2)
+        if (measured_lufs is not None and target_lufs is not None)
+        else None
+    )
+    await log_activity(
+        user,
+        "download",
+        track_id=track_id,
+        track_filename=track.get("original_filename"),
+        duration_sec=round(track.get("duration_sec", 0), 2),
+        preset_id=track.get("preset_id"),
+        preset_name=preset.get("name"),
+        preset_target_lufs=target_lufs,
+        download_format=format,
+        download_format_label=fmt["label"],
+        download_ext=fmt["ext"],
+        file_size_mb=round(len(out_bytes) / (1024 * 1024), 2),
+        measured_lufs=measured_lufs,
+        measured_true_peak_db=track.get("mastered_true_peak_db"),
+        measured_lra=track.get("mastered_lra"),
+        lufs_delta=lufs_delta,
+    )
+
     return StreamingResponse(
         BytesIO(out_bytes),
         media_type=fmt["mime"],
@@ -1124,6 +1222,69 @@ async def admin_send_test_receipt(
     return {"ok": True, "email_id": email_id, "to": user["email"]}
 
 
+@api.get("/admin/activity")
+async def admin_activity(
+    event_type: Optional[str] = None,
+    user_email: Optional[str] = None,
+    since: Optional[str] = None,     # ISO8601 inclusive
+    until: Optional[str] = None,     # ISO8601 exclusive
+    limit: int = 100,
+    offset: int = 0,
+    authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
+):
+    """Admin-only user activity log viewer. Supports filters by event type,
+    user email substring, and timestamp range. Sorted newest first."""
+    user = await resolve_user(db, authorization, session_token)
+    await require_admin(user)
+
+    q: dict = {}
+    if event_type and event_type in ("upload", "process", "download"):
+        q["event_type"] = event_type
+    if user_email:
+        # case-insensitive substring match on email (or name fallback)
+        import re
+        pat = re.compile(re.escape(user_email.strip()), re.IGNORECASE)
+        q["$or"] = [{"user_email": pat}, {"user_name": pat}]
+    ts_q = {}
+    if since:
+        ts_q["$gte"] = since
+    if until:
+        ts_q["$lt"] = until
+    if ts_q:
+        q["timestamp"] = ts_q
+
+    limit = max(1, min(500, int(limit)))
+    offset = max(0, int(offset))
+
+    total = await db.activity_logs.count_documents(q)
+    cursor = (
+        db.activity_logs.find(q, {"_id": 0})
+        .sort("timestamp", -1)
+        .skip(offset)
+        .limit(limit)
+    )
+    items = await cursor.to_list(limit)
+
+    # Summary counts for the selected filter (ignoring limit/offset)
+    summary_pipeline = [
+        {"$match": q},
+        {"$group": {"_id": "$event_type", "n": {"$sum": 1}}},
+    ]
+    by_type = {"upload": 0, "process": 0, "download": 0}
+    async for row in db.activity_logs.aggregate(summary_pipeline):
+        if row["_id"] in by_type:
+            by_type[row["_id"]] = row["n"]
+
+    return {
+        "items": items,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "summary": by_type,
+    }
+
+
 @api.get("/admin/discounts")
 async def admin_list_discounts(
     authorization: Optional[str] = Header(None),
@@ -1380,6 +1541,12 @@ async def on_startup():
     # Indexes
     try:
         await db.discount_codes.create_index("code", unique=True)
+    except Exception:
+        pass
+    try:
+        await db.activity_logs.create_index([("timestamp", -1)])
+        await db.activity_logs.create_index([("event_type", 1), ("timestamp", -1)])
+        await db.activity_logs.create_index([("user_email", 1), ("timestamp", -1)])
     except Exception:
         pass
     # Kick off sample generation in background

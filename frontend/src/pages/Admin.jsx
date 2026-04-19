@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, CheckCircle2, ShieldCheck, Clock, Tag, DollarSign, Percent, Mail } from "lucide-react";
+import AdminActivityLogs from "../components/AdminActivityLogs";
 
 const PERCENT_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 
@@ -391,6 +392,8 @@ export default function Admin() {
             </div>
           </div>
         </section>
+
+        <AdminActivityLogs />
 
         <section className="bg-[#121216] border border-[#2A2A35] rounded-2xl p-6 mb-20" data-testid="admin-email-test-section">
           <div className="flex items-center gap-2 mb-4">

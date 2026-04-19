@@ -103,6 +103,61 @@ def compute_auto_gain(input_bytes: bytes, input_ext: str, target_peak_db: float 
         except OSError:
             pass
 
+def measure_loudness(input_bytes: bytes, input_ext: str) -> dict:
+    """
+    Measure integrated LUFS, true-peak (dBTP), and loudness range (LRA) using
+    ffmpeg's EBU R128 analyser. Returns a dict with floats or None on failure.
+
+    Keys: {"integrated_lufs", "true_peak_db", "lra", "threshold_lufs"}
+    """
+    with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
+        fin.write(input_bytes)
+        in_path = fin.name
+    try:
+        # ebur128 prints a summary block to stderr when the file ends.
+        result = subprocess.run(
+            ["ffmpeg", "-nostats", "-hide_banner",
+             "-i", in_path, "-af", "ebur128=peak=true", "-f", "null", "-"],
+            capture_output=True, timeout=180,
+        )
+        stderr = result.stderr.decode("utf-8", errors="ignore")
+        # Parse the "Summary:" block. Example lines:
+        #   Integrated loudness:
+        #     I:         -13.9 LUFS
+        #     Threshold: -24.0 LUFS
+        #   Loudness range:
+        #     LRA:         6.4 LU
+        #   True peak:
+        #     Peak:       -1.1 dBFS
+        def _grab(token: str):
+            for line in stderr.splitlines():
+                s = line.strip()
+                if s.startswith(token):
+                    try:
+                        # token "I:" -> "I:         -13.9 LUFS"
+                        rest = s.split(token, 1)[1].strip()
+                        return float(rest.split()[0])
+                    except (ValueError, IndexError):
+                        return None
+            return None
+
+        data = {
+            "integrated_lufs": _grab("I:"),
+            "threshold_lufs": _grab("Threshold:"),
+            "lra": _grab("LRA:"),
+            "true_peak_db": _grab("Peak:"),
+        }
+        return data
+    except Exception as e:
+        logger.warning(f"loudness measurement failed: {e}")
+        return {"integrated_lufs": None, "threshold_lufs": None, "lra": None, "true_peak_db": None}
+    finally:
+        try:
+            os.unlink(in_path)
+        except OSError:
+            pass
+
+
 def waveform_peaks(input_bytes: bytes, input_ext: str, num_points: int = 120) -> list:
     """Extract simple peak data for waveform visualization."""
     with tempfile.NamedTemporaryFile(suffix=f".{input_ext}", delete=False) as fin:
