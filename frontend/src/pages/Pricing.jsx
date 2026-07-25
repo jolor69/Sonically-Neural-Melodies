@@ -17,7 +17,7 @@ export default function Pricing() {
   const [paypalConfig, setPaypalConfig] = useState(null);
   const [plans, setPlans] = useState(null); // from /api/plans
 
-  useEffect(() => { refresh?.(); }, []);
+  useEffect(() => { refresh?.(); }, [refresh]);
 
   useEffect(() => {
     api.get("/payments/paypal/config")

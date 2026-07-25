@@ -55,14 +55,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const res = await api.get("/auth/me");
       setUser(res.data);
     } catch (e) {
       console.warn("Refresh /auth/me failed:", e);
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, signup, logout, refresh, setUser }}>

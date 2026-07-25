@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { api } from "../lib/api";
@@ -41,7 +41,7 @@ export default function Admin() {
   const pick = (data, key, fallback) =>
     data.draft?.[key] ?? data.applied?.[key] ?? data.defaults?.[key] ?? fallback;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [s, d] = await Promise.all([
         api.get("/admin/settings"),
@@ -57,9 +57,9 @@ export default function Admin() {
     } catch {
       toast.error("Failed to load admin data");
     }
-  };
+  }, []);
 
-  useEffect(() => { if (user?.is_admin) load(); }, [user]);
+  useEffect(() => { if (user?.is_admin) load(); }, [user, load]);
 
   const saveDraft = async () => {
     setBusy(true);

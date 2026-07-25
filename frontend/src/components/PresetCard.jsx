@@ -26,7 +26,8 @@ export default function PresetCard({ preset, selected, onClick, compact = false,
   }, [which]);
 
   useEffect(() => {
-    return () => { try { audioRef.current?.pause(); } catch {} };
+    const el = audioRef.current;
+    return () => { try { el?.pause(); } catch {} };
   }, []);
 
   const togglePlay = (e) => {
