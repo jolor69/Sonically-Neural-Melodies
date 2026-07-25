@@ -1,0 +1,14 @@
+{
+  "name": "sonically-web",
+  "compatibility_date": "2026-07-26",
+  "assets": {
+    "directory": "./build",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "sonically.pro/*",
+      "custom_domain": true
+    }
+  ]
+}

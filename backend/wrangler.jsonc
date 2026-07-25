@@ -1,0 +1,33 @@
+{
+  "name": "sonically-api",
+  "compatibility_date": "2026-07-26",
+  "main": "./worker/index.js",
+  "containers": [
+    {
+      "class_name": "SonicallyContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "standard-1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "SonicallyContainer",
+        "name": "SONICALLY_CONTAINER"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SonicallyContainer"]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "api.sonically.pro/*",
+      "custom_domain": true
+    }
+  ]
+}

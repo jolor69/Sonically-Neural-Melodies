@@ -80,12 +80,7 @@ memory/test_credentials.md
 # Mobile development
 android-sdk/
 
-# NOTE: .env files are intentionally committed for Emergent deployments.
-# The deploy pipeline rewrites MONGO_URL / REACT_APP_BACKEND_URL / etc. at build time.
-# Real secrets (Stripe/PayPal/Resend keys) are set via deployment environment variables,
-# not committed to the repo.
--e 
-# Environment and credential files
+# Environment and credential files (secrets live only in Cloudflare/CI secrets, never committed)
 .env
 .env.*
 *.env
@@ -93,12 +88,12 @@ credentials.json
 *.pem
 *.key
 .credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
+
+# Exception: no secrets in this one, just the public production API URL — needed
+# at build time for `yarn build` / the frontend deploy workflow.
+!frontend/.env.production
+
+# Local dev tooling (downloaded binaries, not for commit)
+.localdev/
+
+backend/local_storage/

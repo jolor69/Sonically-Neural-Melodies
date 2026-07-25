@@ -39,18 +39,22 @@ export default function Dashboard() {
 
   const runQueue = async (items) => {
     setOverallBusy(true);
+    const results = [];
     for (const item of items) {
       setQueue((q) => q.map((x) => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
         const data = await uploadOne(item.file);
         setTracks((t) => [data, ...t]);
         setQueue((q) => q.map((x) => x.id === item.id ? { ...x, status: "done", track_id: data.track_id } : x));
+        results.push({ id: item.id, status: "done", track_id: data.track_id });
       } catch (e) {
         const msg = e?.response?.data?.detail || "Upload failed";
         setQueue((q) => q.map((x) => x.id === item.id ? { ...x, status: "failed", error: msg } : x));
+        results.push({ id: item.id, status: "failed", error: msg });
       }
     }
     setOverallBusy(false);
+    return results;
   };
 
   const handleFiles = (files) => {
@@ -71,13 +75,10 @@ export default function Dashboard() {
     if (effective.length === 1 && canBatch === false) {
       // Keep old UX for free tier — auto-open after upload
       setQueue(items);
-      runQueue(items).then(() => {
-        if (items[0]?.status !== "failed") {
-          // Navigate via the latest tracks state
-          setTimeout(() => {
-            const first = items[0];
-            if (first) navigate(`/workspace/${first.file ? "" : first.track_id}`);
-          }, 300);
+      runQueue(items).then((results) => {
+        const first = results[0];
+        if (first?.status === "done") {
+          setTimeout(() => navigate(`/workspace/${first.track_id}`), 300);
         }
       });
     } else {
