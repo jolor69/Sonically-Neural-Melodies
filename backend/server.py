@@ -1552,22 +1552,26 @@ async def on_startup():
     # Kick off sample generation in background
     import asyncio
     asyncio.create_task(ensure_preset_samples())
-    # Seed demo user (idempotent)
-    demo_email = "demo@sonically.io"
-    existing = await db.users.find_one({"email": demo_email}, {"_id": 0})
-    if not existing:
-        await db.users.insert_one({
-            "user_id": new_user_id(),
-            "email": demo_email,
-            "name": "Demo User",
-            "picture": None,
-            "password_hash": hash_password("DemoUser123!"),
-            "auth_provider": "email",
-            "subscription_tier": "free",
-            "subscription_status": "none",
-            "created_at": iso(utcnow()),
-        })
-        logger.info("Seeded demo user")
+    # Seed demo user (idempotent) -- must never block/crash app startup if Mongo
+    # is briefly unreachable (e.g. cold start), so failures here are non-fatal.
+    try:
+        demo_email = "demo@sonically.io"
+        existing = await db.users.find_one({"email": demo_email}, {"_id": 0})
+        if not existing:
+            await db.users.insert_one({
+                "user_id": new_user_id(),
+                "email": demo_email,
+                "name": "Demo User",
+                "picture": None,
+                "password_hash": hash_password("DemoUser123!"),
+                "auth_provider": "email",
+                "subscription_tier": "free",
+                "subscription_status": "none",
+                "created_at": iso(utcnow()),
+            })
+            logger.info("Seeded demo user")
+    except Exception as e:
+        logger.error(f"Demo user seed failed: {e}")
 
 
 @app.on_event("shutdown")
