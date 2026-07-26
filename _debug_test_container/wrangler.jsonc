@@ -1,0 +1,21 @@
+{
+  "name": "cf-test-container",
+  "compatibility_date": "2026-07-26",
+  "main": "./index.js",
+  "containers": [
+    {
+      "class_name": "TestContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "lite"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "class_name": "TestContainer", "name": "TEST_CONTAINER" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TestContainer"] }
+  ]
+}
