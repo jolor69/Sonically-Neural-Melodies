@@ -26,7 +26,7 @@
   ],
   "routes": [
     {
-      "pattern": "api.sonically.pro/*",
+      "pattern": "api.sonically.pro",
       "custom_domain": true
     }
   ]
