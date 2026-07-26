@@ -336,13 +336,18 @@ async def root():
 async def health():
     """Lightweight health check for deployment readiness probes.
     Confirms the backend is serving AND MongoDB is reachable."""
+    db_error = None
     try:
         await client.admin.command("ping")
         db_ok = True
     except Exception as e:
         logger.error(f"Health check DB ping failed: {e}")
         db_ok = False
-    return {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
+        db_error = f"{type(e).__name__}: {e}"  # TEMP diagnostic, remove after fixing
+    resp = {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
+    if db_error:
+        resp["db_error"] = db_error
+    return resp
 
 
 @api.get("/presets")
