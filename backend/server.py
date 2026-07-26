@@ -332,6 +332,28 @@ async def root():
     return {"app": "Sonically", "status": "ok"}
 
 
+@api.get("/debug/tls")
+async def debug_tls():
+    """TEMP diagnostic: raw TLS connectivity test to Atlas vs a generic host."""
+    import socket
+    import ssl
+
+    def try_connect(host: str, port: int):
+        try:
+            ctx = ssl.create_default_context()
+            with socket.create_connection((host, port), timeout=8) as sock:
+                with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                    return {"ok": True, "version": ssock.version(), "cipher": ssock.cipher()}
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    return {
+        "google": try_connect("www.google.com", 443),
+        "atlas_shard0": try_connect("ac-ys9o1se-shard-00-00.y8f98cr.mongodb.net", 27017),
+        "cloudflare": try_connect("cloudflare.com", 443),
+    }
+
+
 @api.get("/health")
 async def health():
     """Lightweight health check for deployment readiness probes.
