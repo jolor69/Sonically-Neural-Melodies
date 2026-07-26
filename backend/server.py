@@ -332,44 +332,17 @@ async def root():
     return {"app": "Sonically", "status": "ok"}
 
 
-@api.get("/debug/tls")
-async def debug_tls():
-    """TEMP diagnostic: raw TLS connectivity test to Atlas vs a generic host."""
-    import socket
-    import ssl
-
-    def try_connect(host: str, port: int):
-        try:
-            ctx = ssl.create_default_context()
-            with socket.create_connection((host, port), timeout=8) as sock:
-                with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                    return {"ok": True, "version": ssock.version(), "cipher": ssock.cipher()}
-        except Exception as e:
-            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-
-    return {
-        "google": try_connect("www.google.com", 443),
-        "atlas_shard0": try_connect("ac-ys9o1se-shard-00-00.y8f98cr.mongodb.net", 27017),
-        "cloudflare": try_connect("cloudflare.com", 443),
-    }
-
-
 @api.get("/health")
 async def health():
     """Lightweight health check for deployment readiness probes.
     Confirms the backend is serving AND MongoDB is reachable."""
-    db_error = None
     try:
         await client.admin.command("ping")
         db_ok = True
     except Exception as e:
         logger.error(f"Health check DB ping failed: {e}")
         db_ok = False
-        db_error = f"{type(e).__name__}: {e}"  # TEMP diagnostic, remove after fixing
-    resp = {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
-    if db_error:
-        resp["db_error"] = db_error
-    return resp
+    return {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
 
 
 @api.get("/presets")
