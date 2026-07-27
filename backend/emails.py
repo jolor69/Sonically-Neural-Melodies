@@ -26,7 +26,7 @@ def _from_header() -> str:
     return f"{name} <{email}>"
 
 
-async def _send(to: str, subject: str, html: str, text: Optional[str] = None) -> Optional[str]:
+async def _send(to: str, subject: str, html: str, text: Optional[str] = None, raise_on_error: bool = False) -> Optional[str]:
     _ensure_configured()
     params = {
         "from": _from_header(),
@@ -46,7 +46,20 @@ async def _send(to: str, subject: str, html: str, text: Optional[str] = None) ->
         return email_id
     except Exception as e:
         logger.error(f"Email send failed to {to}: {e}")
+        if raise_on_error:
+            raise
         return None
+
+
+async def send_test_email(to_email: str) -> Optional[str]:
+    """Sends a minimal test email, raising on failure so callers (e.g. an admin
+    diagnostics route) can surface the real Resend error instead of a silent no-op."""
+    return await _send(
+        to_email,
+        "Sonically — test email",
+        "<p>This is a test email confirming Resend delivery is configured correctly for Sonically.</p>",
+        raise_on_error=True,
+    )
 
 
 def _receipt_html(*, name: str, plan: str, billing: str, amount: float, currency: str, provider: str, txn_id: str, app_url: str) -> str:

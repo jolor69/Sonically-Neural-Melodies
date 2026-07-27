@@ -356,6 +356,17 @@ async def health():
     return {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
 
 
+@api.get("/debug/resend-test")
+async def debug_resend_test(to: str):
+    """TEMP — diagnose why password-reset emails aren't arriving. Remove once resolved."""
+    from emails import send_test_email
+    try:
+        email_id = await send_test_email(to)
+        return {"ok": True, "email_id": email_id}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @api.get("/presets")
 async def list_presets():
     return {"presets": get_preset_public()}
