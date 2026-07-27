@@ -470,6 +470,7 @@ export default function Landing() {
               "All in Pro + Hi-res 24/96 & 24/192",
               "Unlimited exports",
               "All 8 presets + full controls",
+              "Batch upload (queue multiple tracks)",
             ]}
             cta="Upgrade to Studio"
             ctaTo="/login?mode=signup"

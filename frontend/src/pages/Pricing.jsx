@@ -210,6 +210,7 @@ export default function Pricing() {
               "All in Pro + Hi-res 24/96 & 24/192",
               "Unlimited exports",
               "All 8 presets + full controls",
+              "Batch upload (queue multiple tracks)",
             ]}
             testId="plan-studio"
             current={user?.subscription_tier === "studio"}
