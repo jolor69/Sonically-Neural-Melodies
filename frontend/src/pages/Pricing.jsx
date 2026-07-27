@@ -210,7 +210,6 @@ export default function Pricing() {
               "All in Pro + Hi-res 24/96 & 24/192",
               "Unlimited exports",
               "All 8 presets + full controls",
-              "Priority processing queue",
             ]}
             testId="plan-studio"
             current={user?.subscription_tier === "studio"}
