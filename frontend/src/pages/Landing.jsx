@@ -397,6 +397,53 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* NEURAL MELODIES COLLAB */}
+      <section id="neural-melodies" className="max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-28">
+        <div className="bg-gradient-to-br from-[#121216] to-[#1A1A20] border border-[#2A2A35] rounded-2xl p-10 md:p-16 relative overflow-hidden">
+          <div className="absolute -left-12 -top-12 w-64 h-64 rounded-full bg-[#A855F7]/20 blur-3xl" />
+          <div className="relative grid md:grid-cols-[auto_1fr] gap-10 items-start">
+            <div className="bg-white rounded-2xl p-3 flex items-center justify-center shrink-0" style={{ width: 96, height: 96 }}>
+              <img
+                src="https://customer-assets.emergentagent.com/job_audio-enhance-34/artifacts/zn8793na_Neural%20Logo.JPG"
+                alt="Neural Melodies"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <div className="label-overline mb-4 text-[#A855F7]">/ In Collaboration With</div>
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4" style={{ fontFamily: "Outfit" }}>
+                Mastering every release for Neural Melodies.
+              </h2>
+              <p className="text-[#9CA3AF] max-w-2xl leading-relaxed mb-8">
+                Sonically was built in partnership with music producer <span className="text-white font-semibold">Neural Melodies</span>,
+                who masters every album through this engine before it ships — to streaming platforms like Spotify,
+                YouTube Music, and Amazon Music, and to social cuts on TikTok, Instagram, and Facebook.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href="https://open.spotify.com/artist/26uWPT3sk0M4Vb6UbZV9OB?si=z1Y1kGAAR_OVivYt_w43zg"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="neural-melodies-spotify-link"
+                  className="inline-flex items-center gap-2 border border-[#2A2A35] hover:border-[#E28C22] hover:text-[#E28C22] px-6 py-3 rounded-md font-semibold transition"
+                >
+                  Listen on Spotify <ArrowRight size={16} />
+                </a>
+                <a
+                  href="https://music.youtube.com/channel/UCjPibysAJpUWRkulgraVfyA?si=PiDEkwrxpkUkdBpO"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="neural-melodies-youtube-music-link"
+                  className="inline-flex items-center gap-2 border border-[#2A2A35] hover:border-[#E28C22] hover:text-[#E28C22] px-6 py-3 rounded-md font-semibold transition"
+                >
+                  Listen on YouTube Music <ArrowRight size={16} />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* PRICING */}
       <section id="pricing" className="max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-28">
         <div className="label-overline mb-4 text-center">/ Plans</div>
