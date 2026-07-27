@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Request, Response, Cookie, Header
+from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Request, Response, Header
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -26,7 +26,7 @@ from storage import init_storage, put_object, get_object, build_path, APP_NAME
 from audio_engine import apply_preset, probe_duration, waveform_peaks, compute_auto_gain, measure_loudness
 from auth import (
     hash_password, verify_password, create_jwt, decode_jwt,
-    fetch_emergent_session, resolve_user, new_user_id,
+    resolve_user, new_user_id,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -475,8 +475,8 @@ async def forgot_password(body: ForgotPasswordRequest):
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="No account found with that email")
-    if user.get("auth_provider") != "email" or not user.get("password_hash"):
-        raise HTTPException(status_code=400, detail="This account signs in with Google — there's no password to reset")
+    if not user.get("password_hash"):
+        raise HTTPException(status_code=400, detail="This account has no password set — contact support")
 
     raw_token = secrets.token_urlsafe(32)
     await db.password_resets.insert_one({
@@ -535,78 +535,11 @@ async def reset_password(body: ResetPasswordRequest, response: Response):
     }
 
 
-@api.post("/auth/oauth/session")
-async def oauth_session_exchange(request: Request, response: Response):
-    """Exchange Emergent session_id for our session cookie."""
-    body = await request.json()
-    session_id = body.get("session_id")
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
-    data = fetch_emergent_session(session_id)
-    email = data["email"].lower()
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "name": data.get("name") or existing.get("name"),
-                "picture": data.get("picture"),
-                "auth_provider": existing.get("auth_provider", "google"),
-            }},
-        )
-    else:
-        user_id = new_user_id()
-        await db.users.insert_one({
-            "user_id": user_id,
-            "email": email,
-            "name": data.get("name", email.split("@")[0]),
-            "picture": data.get("picture"),
-            "password_hash": None,
-            "auth_provider": "google",
-            "subscription_tier": "free",
-            "subscription_status": "none",
-            "created_at": iso(utcnow()),
-        })
-
-    session_token = data["session_token"]
-    expires_at = utcnow() + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at,
-        "created_at": utcnow(),
-    })
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        max_age=7 * 24 * 60 * 60,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-    )
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {
-        "user": {
-            "user_id": user["user_id"],
-            "email": user["email"],
-            "name": user["name"],
-            "picture": user.get("picture"),
-            "auth_provider": user.get("auth_provider"),
-            "subscription_tier": user.get("subscription_tier", "free"),
-            "subscription_status": user.get("subscription_status", "none"),
-            "is_admin": is_admin(user),
-        }
-    }
-
-
 @api.get("/auth/me")
 async def auth_me(
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     return {
         "user_id": user["user_id"],
         "email": user["email"],
@@ -620,12 +553,7 @@ async def auth_me(
 
 
 @api.post("/auth/logout")
-async def logout(
-    response: Response,
-    session_token: Optional[str] = Cookie(None),
-):
-    if session_token:
-        await db.user_sessions.delete_many({"session_token": session_token})
+async def logout(response: Response):
     response.delete_cookie("session_token", path="/")
     response.delete_cookie("auth_token", path="/")
     return {"ok": True}
@@ -636,9 +564,8 @@ async def logout(
 async def upload_track(
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     filename = file.filename or "upload"
     ext = filename.split(".")[-1].lower() if "." in filename else "wav"
     if ext not in ALLOWED_EXT:
@@ -700,9 +627,8 @@ async def upload_track(
 @api.get("/tracks")
 async def list_tracks(
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     cursor = db.tracks.find(
         {"user_id": user["user_id"], "is_deleted": False},
         {"_id": 0},
@@ -715,9 +641,8 @@ async def list_tracks(
 async def get_track(
     track_id: str,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     track = await db.tracks.find_one(
         {"track_id": track_id, "user_id": user["user_id"], "is_deleted": False},
         {"_id": 0},
@@ -731,9 +656,8 @@ async def get_track(
 async def process_track(
     body: ProcessRequest,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     admin = is_admin(user)
     # Monthly quota check
     tier = user.get("subscription_tier", "free")
@@ -865,11 +789,10 @@ async def stream_track(
     which: str,
     token: Optional[str] = None,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
     # Support token via query param for <audio src> tags (can't send headers)
     auth = authorization or (f"Bearer {token}" if token else None)
-    user = await resolve_user(db, auth, session_token)
+    user = await resolve_user(db, auth)
     track = await db.tracks.find_one(
         {"track_id": track_id, "user_id": user["user_id"], "is_deleted": False},
         {"_id": 0},
@@ -911,10 +834,9 @@ async def download_track(
     format: str = "wav16",
     token: Optional[str] = None,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
     auth = authorization or (f"Bearer {token}" if token else None)
-    user = await resolve_user(db, auth, session_token)
+    user = await resolve_user(db, auth)
     fmt = DOWNLOAD_FORMATS.get(format)
     if not fmt:
         raise HTTPException(status_code=400, detail="Unknown format")
@@ -996,9 +918,8 @@ async def download_track(
 async def delete_track(
     track_id: str,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     result = await db.tracks.update_one(
         {"track_id": track_id, "user_id": user["user_id"]},
         {"$set": {"is_deleted": True}},
@@ -1028,9 +949,8 @@ def _public_track(t: dict) -> dict:
 async def payments_status(
     session_id: str,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    await resolve_user(db, authorization, session_token)
+    await resolve_user(db, authorization)
     tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -1057,9 +977,8 @@ async def paypal_config():
 async def paypal_create_order(
     body: PayPalOrderRequest,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     plans = await get_effective_plans()
     plan = plans.get(body.plan)
     if not plan or body.billing not in plan:
@@ -1113,9 +1032,8 @@ async def paypal_capture_order(
     order_id: str,
     request: Request,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     tx = await db.payment_transactions.find_one({"session_id": order_id}, {"_id": 0})
     if not tx:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1209,9 +1127,8 @@ async def require_admin(user: dict):
 @api.get("/admin/settings")
 async def admin_get_settings(
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {"draft": {}, "applied": {}}
     return {
@@ -1231,9 +1148,8 @@ async def admin_get_settings(
 async def admin_put_draft(
     body: dict,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     # Allow duration + pricing keys
     duration_keys = {"pro_max_duration_sec", "studio_max_duration_sec"}
@@ -1261,9 +1177,8 @@ async def admin_put_draft(
 @api.post("/admin/apply")
 async def admin_apply_changes(
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     s = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
     draft = s.get("draft", {})
@@ -1284,10 +1199,9 @@ async def admin_apply_changes(
 async def admin_send_test_receipt(
     request: Request,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
     """Sends a sample receipt email to the admin so they can preview the template."""
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     from emails import send_payment_receipt
     host_url = str(request.base_url).rstrip("/")
@@ -1316,11 +1230,10 @@ async def admin_activity(
     limit: int = 100,
     offset: int = 0,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
     """Admin-only user activity log viewer. Supports filters by event type,
     user email substring, and timestamp range. Sorted newest first."""
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
 
     q: dict = {}
@@ -1373,9 +1286,8 @@ async def admin_activity(
 @api.get("/admin/discounts")
 async def admin_list_discounts(
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     cursor = db.discount_codes.find({}, {"_id": 0}).sort("created_at", -1)
     codes = await cursor.to_list(500)
@@ -1392,9 +1304,8 @@ class DiscountCreate(BaseModel):
 async def admin_add_discount(
     body: DiscountCreate,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     if body.plan not in ("all", "pro", "studio"):
         raise HTTPException(status_code=400, detail="plan must be all|pro|studio")
@@ -1424,9 +1335,8 @@ async def admin_add_discount(
 async def admin_delete_discount(
     code: str,
     authorization: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None),
 ):
-    user = await resolve_user(db, authorization, session_token)
+    user = await resolve_user(db, authorization)
     await require_admin(user)
     r = await db.discount_codes.delete_one({"code": code.upper().strip()})
     return {"ok": True, "deleted": r.deleted_count}
