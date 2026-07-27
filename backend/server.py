@@ -2,6 +2,8 @@
 import os
 import uuid
 import logging
+import hashlib
+import secrets
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
@@ -101,6 +103,15 @@ class SignupRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
     password: str
 
 
@@ -375,6 +386,14 @@ async def list_plans():
 
 
 # ---------------- AUTH ----------------
+RESET_TOKEN_TTL_MINUTES = 30
+
+
+def _frontend_url() -> str:
+    origins = os.environ.get("CORS_ORIGINS", "https://sonically.pro").split(",")
+    return origins[0].strip().rstrip("/")
+
+
 def _set_auth_cookie(response, token: str):
     """Sets the httpOnly JWT cookie — same-site 'none' so it works on the deployed
     cross-origin preview (frontend sonically.pro ↔ API emergentagent subdomain)."""
@@ -433,6 +452,71 @@ async def login(body: LoginRequest, response: Response):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_jwt(user["user_id"])
+    _set_auth_cookie(response, token)
+    return {
+        "token": token,
+        "user": {
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user["name"],
+            "picture": user.get("picture"),
+            "auth_provider": user.get("auth_provider", "email"),
+            "subscription_tier": user.get("subscription_tier", "free"),
+            "subscription_status": user.get("subscription_status", "none"),
+            "is_admin": is_admin(user),
+        },
+    }
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    # Only email/password accounts have a password to reset. Same response either
+    # way (found, OAuth-only, or unknown) so this endpoint can't be used to
+    # enumerate registered emails.
+    if user and user.get("auth_provider") == "email" and user.get("password_hash"):
+        raw_token = secrets.token_urlsafe(32)
+        await db.password_resets.insert_one({
+            "token_hash": hashlib.sha256(raw_token.encode()).hexdigest(),
+            "user_id": user["user_id"],
+            "expires_at": iso(utcnow() + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)),
+            "used": False,
+            "created_at": iso(utcnow()),
+        })
+        from emails import send_password_reset_email
+        await send_password_reset_email(
+            to_email=email,
+            name=user.get("name", ""),
+            reset_url=f"{_frontend_url()}/reset-password?token={raw_token}",
+        )
+    return {"ok": True}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordRequest, response: Response):
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    reset_doc = await db.password_resets.find_one({"token_hash": token_hash}, {"_id": 0})
+    if not reset_doc or reset_doc.get("used"):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    expires_at = reset_doc["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at < utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user = await db.users.find_one({"user_id": reset_doc["user_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": hash_password(body.password)}},
+    )
+    await db.password_resets.update_one({"token_hash": token_hash}, {"$set": {"used": True}})
+
     token = create_jwt(user["user_id"])
     _set_auth_cookie(response, token)
     return {

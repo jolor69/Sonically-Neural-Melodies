@@ -137,6 +137,14 @@ export default function Auth() {
             <FormField icon={Lock} placeholder="Password" type="password" value={form.password}
               onChange={(v) => setForm({ ...form, password: v })} testId="auth-password-input" />
 
+            {mode === "login" && (
+              <div className="text-right">
+                <Link to="/forgot-password" data-testid="forgot-password-link" className="text-xs text-[#9CA3AF] hover:text-[#E28C22]">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={busy}
