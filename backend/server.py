@@ -469,6 +469,24 @@ async def login(body: LoginRequest, response: Response):
     }
 
 
+@api.post("/debug/generate-reset-token")
+async def debug_generate_reset_token(body: ForgotPasswordRequest):
+    """TEMP — QA-only helper to test the reset-password flow without inbox access. Remove after verifying."""
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user or not user.get("password_hash"):
+        raise HTTPException(status_code=404, detail="No resettable account")
+    raw_token = secrets.token_urlsafe(32)
+    await db.password_resets.insert_one({
+        "token_hash": hashlib.sha256(raw_token.encode()).hexdigest(),
+        "user_id": user["user_id"],
+        "expires_at": iso(utcnow() + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)),
+        "used": False,
+        "created_at": iso(utcnow()),
+    })
+    return {"token": raw_token}
+
+
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotPasswordRequest):
     email = body.email.lower()
