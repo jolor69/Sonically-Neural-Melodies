@@ -21,6 +21,8 @@ export class SonicallyContainer extends Container {
       R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY || "",
       R2_BUCKET: env.R2_BUCKET || "",
       RESEND_API_KEY: env.RESEND_API_KEY || "",
+      RESEND_FROM_EMAIL: env.RESEND_FROM_EMAIL || "",
+      RESEND_FROM_NAME: env.RESEND_FROM_NAME || "",
       PAYPAL_MODE: env.PAYPAL_MODE || "",
       PAYPAL_SANDBOX_CLIENT_ID: env.PAYPAL_SANDBOX_CLIENT_ID || "",
       PAYPAL_SANDBOX_CLIENT_SECRET: env.PAYPAL_SANDBOX_CLIENT_SECRET || "",
