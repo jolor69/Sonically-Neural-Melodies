@@ -356,17 +356,6 @@ async def health():
     return {"app": "Sonically", "status": "ok" if db_ok else "degraded", "db": "up" if db_ok else "down"}
 
 
-@api.get("/debug/resend-test")
-async def debug_resend_test(to: str):
-    """TEMP — diagnose why password-reset emails aren't arriving. Remove once resolved."""
-    from emails import send_test_email
-    try:
-        email_id = await send_test_email(to)
-        return {"ok": True, "email_id": email_id}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
 @api.get("/presets")
 async def list_presets():
     return {"presets": get_preset_public()}
@@ -484,24 +473,25 @@ async def login(body: LoginRequest, response: Response):
 async def forgot_password(body: ForgotPasswordRequest):
     email = body.email.lower()
     user = await db.users.find_one({"email": email}, {"_id": 0})
-    # Only email/password accounts have a password to reset. Same response either
-    # way (found, OAuth-only, or unknown) so this endpoint can't be used to
-    # enumerate registered emails.
-    if user and user.get("auth_provider") == "email" and user.get("password_hash"):
-        raw_token = secrets.token_urlsafe(32)
-        await db.password_resets.insert_one({
-            "token_hash": hashlib.sha256(raw_token.encode()).hexdigest(),
-            "user_id": user["user_id"],
-            "expires_at": iso(utcnow() + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)),
-            "used": False,
-            "created_at": iso(utcnow()),
-        })
-        from emails import send_password_reset_email
-        await send_password_reset_email(
-            to_email=email,
-            name=user.get("name", ""),
-            reset_url=f"{_frontend_url()}/reset-password?token={raw_token}",
-        )
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that email")
+    if user.get("auth_provider") != "email" or not user.get("password_hash"):
+        raise HTTPException(status_code=400, detail="This account signs in with Google — there's no password to reset")
+
+    raw_token = secrets.token_urlsafe(32)
+    await db.password_resets.insert_one({
+        "token_hash": hashlib.sha256(raw_token.encode()).hexdigest(),
+        "user_id": user["user_id"],
+        "expires_at": iso(utcnow() + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)),
+        "used": False,
+        "created_at": iso(utcnow()),
+    })
+    from emails import send_password_reset_email
+    await send_password_reset_email(
+        to_email=email,
+        name=user.get("name", ""),
+        reset_url=f"{_frontend_url()}/reset-password?token={raw_token}",
+    )
     return {"ok": True}
 
 
