@@ -38,7 +38,10 @@ export default function PresetCard({ preset, selected, onClick, compact = false,
       el.pause();
       setPlaying(false);
     } else {
-      el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      el.play().then(() => setPlaying(true)).catch((err) => {
+        console.error("Sample playback failed:", err);
+        setPlaying(false);
+      });
     }
   };
 

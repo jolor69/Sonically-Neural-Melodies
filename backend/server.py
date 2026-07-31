@@ -1485,7 +1485,7 @@ async def ensure_preset_samples():
 
 
 @api.get("/presets/{preset_id}/sample/{which}")
-async def preset_sample(preset_id: str, which: str):
+async def preset_sample(preset_id: str, which: str, range: Optional[str] = Header(default=None)):
     if which not in ("original", "mastered"):
         raise HTTPException(status_code=400, detail="which must be original|mastered")
     if preset_id not in PRESET_MAP:
@@ -1498,15 +1498,50 @@ async def preset_sample(preset_id: str, which: str):
     if not sample:
         raise HTTPException(status_code=503, detail="Sample not ready, please retry")
     data = sample[which]
+    total = len(data)
     safe_title = sample.get("title", "").encode("ascii", "ignore").decode("ascii")
+    base_headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=86400",
+        "X-Sample-Title": safe_title,
+    }
+
+    # Mobile Safari/Chrome's <audio> pipeline issues Range requests and expects
+    # a real 206 response; without this it can silently fail to play.
+    if range:
+        try:
+            units, _, range_spec = range.partition("=")
+            start_s, _, end_s = range_spec.partition("-")
+            if units.strip() != "bytes":
+                raise ValueError("unsupported range unit")
+            start = int(start_s) if start_s else 0
+            end = int(end_s) if end_s else total - 1
+            end = min(end, total - 1)
+            if start < 0 or start > end:
+                raise ValueError("invalid range")
+        except ValueError:
+            return Response(
+                status_code=416,
+                headers={**base_headers, "Content-Range": f"bytes */{total}"},
+            )
+        chunk = data[start:end + 1]
+        return Response(
+            content=chunk,
+            status_code=206,
+            media_type="audio/wav",
+            headers={
+                **base_headers,
+                "Content-Length": str(len(chunk)),
+                "Content-Range": f"bytes {start}-{end}/{total}",
+            },
+        )
+
     return Response(
         content=data,
         media_type="audio/wav",
         headers={
-            "Content-Length": str(len(data)),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=86400",
-            "X-Sample-Title": safe_title,
+            **base_headers,
+            "Content-Length": str(total),
         },
     )
 
